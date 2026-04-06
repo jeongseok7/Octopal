@@ -544,6 +544,8 @@ export function App() {
         activeWorkspace={activeWorkspace}
         state={state}
         activeFolder={activeFolder}
+        centerTab={centerTab}
+        setCenterTab={setCenterTab}
         workspaceMenuOpen={workspaceMenuOpen}
         setWorkspaceMenuOpen={setWorkspaceMenuOpen}
         setActiveFolder={setActiveFolder}
@@ -555,21 +557,6 @@ export function App() {
       />
 
       <div className="center-panel">
-        <div className="center-tabs drag">
-          <button
-            className={`center-tab ${centerTab === 'chat' ? 'active' : ''}`}
-            onClick={() => setCenterTab('chat')}
-          >
-            Chat
-          </button>
-          <button
-            className={`center-tab ${centerTab === 'wiki' ? 'active' : ''}`}
-            onClick={() => setCenterTab('wiki')}
-            disabled={!activeFolder}
-          >
-            Wiki
-          </button>
-        </div>
         {centerTab === 'chat' ? (
           <ChatPanel
             activeFolder={activeFolder}
@@ -586,8 +573,8 @@ export function App() {
             onApproveHandoff={approveHandoff}
             onDismissHandoff={dismissHandoff}
           />
-        ) : activeFolder ? (
-          <WikiPanel activeFolder={activeFolder} />
+        ) : state.activeWorkspaceId ? (
+          <WikiPanel workspaceId={state.activeWorkspaceId} />
         ) : null}
       </div>
 

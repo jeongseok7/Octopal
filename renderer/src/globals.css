@@ -1,39 +1,40 @@
 /* ── Tossface Emoji Font (https://github.com/toss/tossface) ── */
 @import url('https://cdn.jsdelivr.net/gh/toss/tossface/dist/tossface.css');
 
-/* ── Design Tokens ── */
+/* ── Design Tokens: Rose Red Wine Theme ── */
 :root {
-  /* Background layers */
-  --bg-base: #0e0e10;
-  --bg-surface: #16161a;
-  --bg-elevated: #1f1f24;
-  --bg-hover: #262630;
+  /* Background layers — subtle wine tint */
+  --bg-base: #120e0f;
+  --bg-surface: #1b1517;
+  --bg-elevated: #251e21;
+  --bg-hover: #312830;
 
-  /* Borders */
-  --border: #2a2a30;
-  --border-hover: #4a4a50;
+  /* Borders — wine-tinted */
+  --border: #3c2d33;
+  --border-hover: #4f3f47;
 
-  /* Text — accessible contrast ratios on --bg-surface */
-  --text-primary: #e6e6e6;
-  --text-heading: #ffffff;
-  --text-secondary: #a0a0a0;   /* ≈5.3:1 on #16161a  (was #888 → 3.5:1) */
-  --text-muted: #8a8a8a;       /* ≈4.5:1 on #16161a  (was #666 → 2.4:1) */
-  --text-dim: #6a6a6a;         /* decorative only, not for readable text */
+  /* Text — warm rose-toned whites */
+  --text-primary: #f0e8ec;
+  --text-heading: #fff3f7;
+  --text-secondary: #b89da8;   /* muted rose */
+  --text-muted: #967d86;       /* warm muted */
+  --text-dim: #6a5560;         /* decorative only, not for readable text */
 
-  /* Accent */
-  --accent: #3a5aff;
-  --accent-hover: #4a6aff;
+  /* Accent — Rose Red */
+  --accent: #C94466;
+  --accent-hover: #D95A7A;
+  --accent-glow: rgba(201, 68, 102, 0.15);
 
-  /* Semantic */
+  /* Semantic — harmonized with wine base */
   --danger: #ff6b6b;
-  --danger-text: #ff9999;
-  --danger-bg: #3a1a1a;
-  --success: #4ade80;
-  --warning: #ffd43b;
+  --danger-text: #ffa0a0;
+  --danger-bg: #2d1518;
+  --success: #5cb88a;
+  --warning: #ffcb5c;
 
-  /* Shadows */
-  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.6);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+  /* Shadows — wine-tinted for cohesion */
+  --shadow-md: 0 12px 32px rgba(16, 6, 10, 0.7);
+  --shadow-lg: 0 20px 60px rgba(16, 6, 10, 0.6);
 
   /* Radii */
   --radius-sm: 4px;
@@ -59,7 +60,7 @@
 
 html, body, #root {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Tossface', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: var(--font-base);
   color: var(--text-primary);
   background: var(--bg-base);
@@ -79,6 +80,11 @@ button {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ── Claude Terracotta: Signature glow effects ── */
+.sidebar-nav-item.active {
+  box-shadow: inset 0 0 20px rgba(218, 119, 86, 0.08);
 }
 
 /* ── Layout ── */
@@ -343,6 +349,41 @@ button {
   font-weight: 600;
   font-size: var(--font-sm);
   color: var(--text-heading);
+}
+
+/* ── Sidebar Nav (Wiki, etc.) ── */
+.sidebar-nav {
+  padding: 4px 8px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.sidebar-nav-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-heading);
+}
+
+.sidebar-nav-item.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sidebar-nav-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .section-label {
@@ -707,7 +748,7 @@ button {
 
 .emoji-tab.active {
   color: var(--accent);
-  background: rgba(58, 90, 255, 0.1);
+  background: rgba(197, 92, 212, 0.1);
 }
 
 .emoji-grid {
@@ -744,7 +785,7 @@ button {
 }
 
 .emoji-cell.selected {
-  background: rgba(58, 90, 255, 0.15);
+  background: rgba(197, 92, 212, 0.12);
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -894,7 +935,7 @@ button {
 
 .message.user .bubble {
   background: var(--accent);
-  color: var(--text-heading);
+  color: #fff;
 }
 
 .bubble {
@@ -1289,6 +1330,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-app-region: no-drag;
 }
 
 .wiki-new-btn:hover {
@@ -1511,11 +1553,14 @@ button {
 
 .composer-textarea:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent),
+              0 0 20px var(--accent-glow),
+              0 0 40px var(--accent-glow);
 }
 
 .send {
   background: var(--accent);
-  color: var(--text-heading);
+  color: #fff;
   border: none;
   padding: 10px 14px;
   border-radius: 10px;
@@ -1525,11 +1570,14 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--transition);
+  transition: box-shadow var(--transition), filter var(--transition);
 }
 
 .send:hover {
   background: var(--accent-hover);
+  box-shadow: 0 0 16px var(--accent-glow),
+              0 0 24px var(--accent-glow);
+  filter: brightness(1.1);
 }
 
 /* ── Attach Button ── */
@@ -1637,7 +1685,7 @@ button {
   position: absolute;
   inset: 0;
   z-index: 200;
-  background: rgba(58, 90, 255, 0.08);
+  background: rgba(197, 92, 212, 0.06);
   border: 2px dashed var(--accent);
   border-radius: 12px;
   display: flex;
@@ -1857,11 +1905,12 @@ button {
 
 .btn-primary {
   background: var(--accent);
-  color: var(--text-heading);
+  color: #fff;
 }
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  filter: brightness(1.1);
 }
 
 .btn-secondary {

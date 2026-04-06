@@ -115,16 +115,16 @@ interface Window {
       folderPath: string
       relativePath: string
     }) => Promise<string>
-    wikiList: (folderPath: string) => Promise<
+    wikiList: (workspaceId: string) => Promise<
       Array<{ name: string; path: string; size: number; mtime: number }>
     >
-    wikiRead: (params: { folderPath: string; name: string }) => Promise<
+    wikiRead: (params: { workspaceId: string; name: string }) => Promise<
       { ok: true; content: string } | { ok: false; error: string }
     >
-    wikiWrite: (params: { folderPath: string; name: string; content: string }) => Promise<
+    wikiWrite: (params: { workspaceId: string; name: string; content: string }) => Promise<
       { ok: true; name: string } | { ok: false; error: string }
     >
-    wikiDelete: (params: { folderPath: string; name: string }) => Promise<
+    wikiDelete: (params: { workspaceId: string; name: string }) => Promise<
       { ok: true } | { ok: false; error: string }
     >
   }

@@ -3,19 +3,20 @@ import { FileText, Plus, Trash2, Save } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
 interface WikiPanelProps {
-  activeFolder: string
+  workspaceId: string
 }
 
-export function WikiPanel({ activeFolder }: WikiPanelProps) {
+export function WikiPanel({ workspaceId }: WikiPanelProps) {
   const [pages, setPages] = useState<WikiPage[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [content, setContent] = useState('')
   const [dirty, setDirty] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [newPageName, setNewPageName] = useState<string | null>(null)
 
   const refreshPages = () => {
-    window.api.wikiList(activeFolder).then((list) => {
+    window.api.wikiList(workspaceId).then((list) => {
       setPages(list)
       if (list.length > 0 && !selected) {
         setSelected(list[0].name)
@@ -29,7 +30,7 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
   useEffect(() => {
     refreshPages()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFolder])
+  }, [workspaceId])
 
   useEffect(() => {
     if (!selected) {
@@ -37,13 +38,13 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
       setDirty(false)
       return
     }
-    window.api.wikiRead({ folderPath: activeFolder, name: selected }).then((res) => {
+    window.api.wikiRead({ workspaceId: workspaceId, name: selected }).then((res) => {
       if (res.ok) {
         setContent(res.content)
         setDirty(false)
       }
     })
-  }, [selected, activeFolder])
+  }, [selected, workspaceId])
 
   // Poll for external changes (agents writing) every 3s
   useEffect(() => {
@@ -54,14 +55,22 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty])
 
-  const createPage = async () => {
-    const name = prompt('New page name (e.g. goals, decisions, design-system)')
-    if (!name) return
+  const openCreatePage = () => {
+    setNewPageName('')
+  }
+
+  const confirmCreatePage = async () => {
+    const name = (newPageName || '').trim()
+    if (!name) {
+      setNewPageName(null)
+      return
+    }
     const res = await window.api.wikiWrite({
-      folderPath: activeFolder,
+      workspaceId: workspaceId,
       name,
       content: `# ${name.replace(/\.md$/, '')}\n\n`,
     })
+    setNewPageName(null)
     if (res.ok) {
       refreshPages()
       setSelected(res.name)
@@ -74,7 +83,7 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
   const deletePage = async () => {
     if (!selected) return
     if (!confirm(`Delete ${selected}?`)) return
-    await window.api.wikiDelete({ folderPath: activeFolder, name: selected })
+    await window.api.wikiDelete({ workspaceId: workspaceId, name: selected })
     setSelected(null)
     refreshPages()
   }
@@ -83,7 +92,7 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
     if (!selected) return
     setSaving(true)
     const res = await window.api.wikiWrite({
-      folderPath: activeFolder,
+      workspaceId: workspaceId,
       name: selected,
       content,
     })
@@ -98,9 +107,9 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
   return (
     <div className="wiki-panel">
       <aside className="wiki-sidebar">
-        <div className="wiki-sidebar-header">
+        <div className="wiki-sidebar-header drag">
           <span className="section-title">Wiki</span>
-          <button className="wiki-new-btn" onClick={createPage} title="New page">
+          <button className="wiki-new-btn" onClick={openCreatePage} title="New page">
             <Plus size={14} />
           </button>
         </div>
@@ -175,6 +184,38 @@ export function WikiPanel({ activeFolder }: WikiPanelProps) {
           </>
         )}
       </main>
+
+      {newPageName !== null && (
+        <div className="modal-backdrop" onClick={() => setNewPageName(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">New wiki page</div>
+            <label className="modal-label">Name</label>
+            <input
+              className="modal-input"
+              placeholder="goals, decisions, design-system…"
+              value={newPageName}
+              onChange={(e) => setNewPageName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmCreatePage()
+                if (e.key === 'Escape') setNewPageName(null)
+              }}
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setNewPageName(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={confirmCreatePage}
+                disabled={!newPageName.trim()}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

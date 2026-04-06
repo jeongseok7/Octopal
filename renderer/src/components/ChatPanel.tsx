@@ -263,6 +263,9 @@ export function ChatPanel({
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
+      // Ignore Enter while the IME is still composing (Korean/Japanese/Chinese).
+      // Without this, the last jamo gets committed as its own separate message.
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return
       e.preventDefault()
       handleSend()
     }

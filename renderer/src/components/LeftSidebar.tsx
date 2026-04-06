@@ -1,11 +1,13 @@
 import { useRef, useEffect } from 'react'
 import { basename } from '../utils'
-import { FolderOpen, ChevronDown, X } from 'lucide-react'
+import { FolderOpen, ChevronDown, X, BookOpen } from 'lucide-react'
 
 interface LeftSidebarProps {
   activeWorkspace: Workspace | null
   state: AppState
   activeFolder: string | null
+  centerTab: 'chat' | 'wiki'
+  setCenterTab: (tab: 'chat' | 'wiki') => void
   workspaceMenuOpen: boolean
   setWorkspaceMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void
   setActiveFolder: (f: string) => void
@@ -20,6 +22,8 @@ export function LeftSidebar({
   activeWorkspace,
   state,
   activeFolder,
+  centerTab,
+  setCenterTab,
   workspaceMenuOpen,
   setWorkspaceMenuOpen,
   setActiveFolder,
@@ -92,13 +96,23 @@ export function LeftSidebar({
           </div>
         )}
       </div>
+      <div className="sidebar-nav">
+        <button
+          className={`sidebar-nav-item ${centerTab === 'wiki' ? 'active' : ''}`}
+          onClick={() => setCenterTab(centerTab === 'wiki' ? 'chat' : 'wiki')}
+          disabled={!state.activeWorkspaceId}
+        >
+          <BookOpen size={16} />
+          <span>Wiki</span>
+        </button>
+      </div>
       <div className="section-label">Folders</div>
       <div className="project-list">
         {folders.map((f) => (
           <button
             key={f}
             className={`project-item ${f === activeFolder ? 'active' : ''}`}
-            onClick={() => setActiveFolder(f)}
+            onClick={() => { setActiveFolder(f); setCenterTab('chat') }}
             onContextMenu={(e) => {
               e.preventDefault()
               if (confirm(`Remove ${basename(f)} from the list?`)) removeFolder(f)

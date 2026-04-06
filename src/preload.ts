@@ -91,11 +91,11 @@ contextBridge.exposeInMainWorld('api', {
     folderPath: string
     relativePath: string
   }) => ipcRenderer.invoke('file:getAbsolutePath', params),
-  wikiList: (folderPath: string) => ipcRenderer.invoke('wiki:list', folderPath),
-  wikiRead: (params: { folderPath: string; name: string }) =>
+  wikiList: (workspaceId: string) => ipcRenderer.invoke('wiki:list', workspaceId),
+  wikiRead: (params: { workspaceId: string; name: string }) =>
     ipcRenderer.invoke('wiki:read', params),
-  wikiWrite: (params: { folderPath: string; name: string; content: string }) =>
+  wikiWrite: (params: { workspaceId: string; name: string; content: string }) =>
     ipcRenderer.invoke('wiki:write', params),
-  wikiDelete: (params: { folderPath: string; name: string }) =>
+  wikiDelete: (params: { workspaceId: string; name: string }) =>
     ipcRenderer.invoke('wiki:delete', params),
 })

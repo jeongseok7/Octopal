@@ -146,6 +146,11 @@ function getWorkspace(state: State, id: string | null): Workspace | null {
   return state.workspaces.find((w) => w.id === id) || null
 }
 
+function findWorkspaceByFolder(folderPath: string): Workspace | null {
+  const state = loadState()
+  return state.workspaces.find((w) => w.folders.includes(folderPath)) || null
+}
+
 // ── IPC handlers ──────────────────────────────
 
 ipcMain.handle('state:load', () => loadState())
@@ -215,11 +220,11 @@ ipcMain.handle('folder:remove', (_event, params: { workspaceId: string; folderPa
 })
 
 // ── Wiki ──
-// Project-scoped markdown notes stored at <folder>/.runechat/wiki/*.md.
+// Workspace-scoped markdown notes stored at <STATE_DIR>/wiki/<workspaceId>/*.md.
 // Both agents (via Read/Write tools) and the user (via the Wiki tab) can edit them.
 
-function getWikiDir(folderPath: string): string {
-  return path.join(folderPath, '.runechat', 'wiki')
+function getWikiDir(workspaceId: string): string {
+  return path.join(STATE_DIR, 'wiki', workspaceId)
 }
 
 function sanitizeWikiName(name: string): string | null {
@@ -230,9 +235,9 @@ function sanitizeWikiName(name: string): string | null {
   return trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`
 }
 
-ipcMain.handle('wiki:list', (_event, folderPath: string) => {
+ipcMain.handle('wiki:list', (_event, workspaceId: string) => {
   try {
-    const dir = getWikiDir(folderPath)
+    const dir = getWikiDir(workspaceId)
     if (!fs.existsSync(dir)) return []
     return fs.readdirSync(dir)
       .filter((f) => f.endsWith('.md'))
@@ -252,11 +257,11 @@ ipcMain.handle('wiki:list', (_event, folderPath: string) => {
   }
 })
 
-ipcMain.handle('wiki:read', (_event, params: { folderPath: string; name: string }) => {
+ipcMain.handle('wiki:read', (_event, params: { workspaceId: string; name: string }) => {
   try {
     const safe = sanitizeWikiName(params.name)
     if (!safe) return { ok: false, error: 'Invalid name' }
-    const filePath = path.join(getWikiDir(params.folderPath), safe)
+    const filePath = path.join(getWikiDir(params.workspaceId), safe)
     if (!fs.existsSync(filePath)) return { ok: false, error: 'Not found' }
     return { ok: true, content: fs.readFileSync(filePath, 'utf-8') }
   } catch (e: any) {
@@ -264,11 +269,11 @@ ipcMain.handle('wiki:read', (_event, params: { folderPath: string; name: string 
   }
 })
 
-ipcMain.handle('wiki:write', (_event, params: { folderPath: string; name: string; content: string }) => {
+ipcMain.handle('wiki:write', (_event, params: { workspaceId: string; name: string; content: string }) => {
   try {
     const safe = sanitizeWikiName(params.name)
     if (!safe) return { ok: false, error: 'Invalid name' }
-    const dir = getWikiDir(params.folderPath)
+    const dir = getWikiDir(params.workspaceId)
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, safe), params.content)
     return { ok: true, name: safe }
@@ -277,11 +282,11 @@ ipcMain.handle('wiki:write', (_event, params: { folderPath: string; name: string
   }
 })
 
-ipcMain.handle('wiki:delete', (_event, params: { folderPath: string; name: string }) => {
+ipcMain.handle('wiki:delete', (_event, params: { workspaceId: string; name: string }) => {
   try {
     const safe = sanitizeWikiName(params.name)
     if (!safe) return { ok: false, error: 'Invalid name' }
-    const filePath = path.join(getWikiDir(params.folderPath), safe)
+    const filePath = path.join(getWikiDir(params.workspaceId), safe)
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     return { ok: true }
   } catch (e: any) {
@@ -780,27 +785,29 @@ How your world works:
       })
     }
 
-    // Tell the agent about the project wiki.
+    // Tell the agent about the workspace wiki, and make sure the wiki
+    // directory exists so we can grant access to it via --add-dir below.
+    let agentWikiDir: string | null = null
     try {
-      const wikiDir = getWikiDir(folderPath)
-      if (fs.existsSync(wikiDir)) {
-        const wikiFiles = fs.readdirSync(wikiDir).filter((f) => f.endsWith('.md'))
-        if (wikiFiles.length > 0) {
-          systemParts.push(
-            `\nProject wiki (shared notes the whole team can read and write):
-- Location: .runechat/wiki/
-- Existing pages: ${wikiFiles.join(', ')}
-- Use Read to check any page when you need project context (decisions, goals, conventions).
-- Use Write to add or update pages when the team agrees on something important. Keep pages short and factual.`
-          )
-        } else {
-          systemParts.push(
-            `\nProject wiki: .runechat/wiki/ (empty — create pages with Write when the team needs shared notes).`
-          )
-        }
-      } else {
+      const ws = findWorkspaceByFolder(folderPath)
+      if (ws) {
+        const wikiDir = getWikiDir(ws.id)
+        fs.mkdirSync(wikiDir, { recursive: true })
+        agentWikiDir = wikiDir
+        const wikiFiles = fs.existsSync(wikiDir)
+          ? fs.readdirSync(wikiDir).filter((f) => f.endsWith('.md'))
+          : []
+        const pageList =
+          wikiFiles.length > 0 ? wikiFiles.join(', ') : '(none yet)'
         systemParts.push(
-          `\nProject wiki: .runechat/wiki/ (not created yet — you may create it with Write when useful).`
+          `\nWorkspace wiki — shared notes the whole team (you, your peers, and the user) can read and write:
+- Wiki directory (absolute path): ${wikiDir}
+- Existing pages: ${pageList}
+- The wiki is shared across all folders in this workspace.
+- To READ a page: use the Read tool with the absolute path, e.g. Read "${wikiDir}/<page>.md".
+- To LIST pages: use Glob with "${wikiDir}/*.md".
+- To WRITE or UPDATE a page: use Write/Edit with the absolute path under this directory. Only .md files, flat (no subfolders).
+- Check the wiki at the start of non-trivial tasks to pick up team context, decisions, and goals. Update it when you learn something durable the team should remember.`
         )
       }
     } catch {}
@@ -863,6 +870,13 @@ How to collaborate (very important):
       '--verbose',
       '--output-format', 'stream-json',
     ]
+
+    // Give the agent access to the workspace wiki directory in addition to
+    // its own folder. Without this, Read/Write tools can't touch the wiki
+    // because it lives outside the agent's cwd.
+    if (agentWikiDir) {
+      claudeArgs.push('--add-dir', agentWikiDir)
+    }
 
     if (hasActivePerms) {
       claudeArgs.push('--dangerously-skip-permissions')
