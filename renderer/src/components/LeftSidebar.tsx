@@ -1,13 +1,14 @@
 import { useRef, useEffect } from 'react'
 import { basename } from '../utils'
-import { FolderOpen, ChevronDown, X, BookOpen } from 'lucide-react'
+import { FolderOpen, ChevronDown, X, BookOpen, Activity } from 'lucide-react'
 
 interface LeftSidebarProps {
   activeWorkspace: Workspace | null
   state: AppState
   activeFolder: string | null
-  centerTab: 'chat' | 'wiki'
-  setCenterTab: (tab: 'chat' | 'wiki') => void
+  centerTab: 'chat' | 'wiki' | 'activity'
+  setCenterTab: (tab: 'chat' | 'wiki' | 'activity') => void
+  activityCount: number
   workspaceMenuOpen: boolean
   setWorkspaceMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void
   setActiveFolder: (f: string | null) => void
@@ -24,6 +25,7 @@ export function LeftSidebar({
   activeFolder,
   centerTab,
   setCenterTab,
+  activityCount,
   workspaceMenuOpen,
   setWorkspaceMenuOpen,
   setActiveFolder,
@@ -115,6 +117,26 @@ export function LeftSidebar({
         >
           <BookOpen size={16} />
           <span>Wiki</span>
+        </button>
+        <button
+          className={`sidebar-nav-item ${centerTab === 'activity' ? 'active' : ''}`}
+          onClick={() => {
+            if (centerTab === 'activity') {
+              if (!activeFolder && folders.length > 0) {
+                setActiveFolder(folders[0])
+              }
+              setCenterTab('chat')
+            } else {
+              setCenterTab('activity')
+            }
+          }}
+          disabled={!state.activeWorkspaceId}
+        >
+          <Activity size={16} />
+          <span>Activity</span>
+          {activityCount > 0 && (
+            <span className="sidebar-nav-badge">{activityCount}</span>
+          )}
         </button>
       </div>
       <div className="section-label">Folders</div>

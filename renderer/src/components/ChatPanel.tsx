@@ -37,6 +37,9 @@ interface ChatPanelProps {
   send: (attachments?: Attachment[]) => void
   onApproveHandoff: (messageId: string) => void
   onDismissHandoff: (messageId: string) => void
+  hasMoreMessages: boolean
+  loadingMore: boolean
+  onLoadMore: () => Promise<void>
 }
 
 export function ChatPanel({
@@ -53,6 +56,9 @@ export function ChatPanel({
   send,
   onApproveHandoff,
   onDismissHandoff,
+  hasMoreMessages,
+  loadingMore,
+  onLoadMore,
 }: ChatPanelProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -65,6 +71,7 @@ export function ChatPanel({
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [showScrollDown, setShowScrollDown] = useState(false)
   const dragCounterRef = useRef(0)
+  const initialScrollDoneRef = useRef<string | null>(null)
 
   // Auto-grow textarea based on content
   const adjustTextareaHeight = useCallback(() => {
@@ -211,6 +218,7 @@ export function ChatPanel({
   }
 
   // Track scroll position — if user scrolled up, disable auto-scroll
+  // Also detect scroll-to-top for loading older messages
   const handleMessagesScroll = () => {
     const el = messagesContainerRef.current
     if (!el) return
@@ -218,14 +226,46 @@ export function ChatPanel({
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
     isNearBottomRef.current = atBottom
     setShowScrollDown(!atBottom)
+
+    // Load more when scrolled near top
+    if (el.scrollTop < 60 && hasMoreMessages && !loadingMore) {
+      const prevScrollHeight = el.scrollHeight
+      onLoadMore().then(() => {
+        // Preserve scroll position after prepending older messages
+        requestAnimationFrame(() => {
+          const newScrollHeight = el.scrollHeight
+          el.scrollTop = newScrollHeight - prevScrollHeight
+        })
+      })
+    }
   }
+
+  // Reset scroll state when switching folders — force scroll to bottom
+  useEffect(() => {
+    isNearBottomRef.current = true
+    initialScrollDoneRef.current = null
+    setShowScrollDown(false)
+  }, [activeFolder])
 
   // Auto-scroll to bottom only when user is near bottom
   useEffect(() => {
+    if (!activeFolder || folderMessages.length === 0) return
+
+    // On initial load (folder switch), force instant scroll to bottom
+    if (initialScrollDoneRef.current !== activeFolder) {
+      initialScrollDoneRef.current = activeFolder
+      // Use requestAnimationFrame to wait for DOM to render
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
+        isNearBottomRef.current = true
+      })
+      return
+    }
+
     if (isNearBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [folderMessages])
+  }, [folderMessages, activeFolder])
 
   // Scroll-to-bottom handler
   const scrollToBottom = () => {
@@ -315,7 +355,17 @@ export function ChatPanel({
       )}
 
       <div className="messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
-        {folderMessages.length === 0 && (
+        {/* Loading indicator for older messages */}
+        {loadingMore && (
+          <div className="load-more-indicator">
+            <span className="load-more-dot" />
+            Loading older messages…
+          </div>
+        )}
+        {hasMoreMessages && !loadingMore && folderMessages.length > 0 && (
+          <div className="load-more-hint">↑ Scroll up for older messages</div>
+        )}
+        {folderMessages.length === 0 && !loadingMore && (
           <div className="empty">
             <div className="empty-title">Octopal</div>
             <div className="empty-sub">

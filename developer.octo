@@ -483,6 +483,210 @@
       "text": "✅ 빌드 성공!\n\n---\n\n## 수정 완료 요약\n\n| 버그 | 수정 | 파일 |\n|------|------|------|\n| **#2 백그라운드 throttling** | `backgroundThrottling: false` 추가 | `src/main.ts:66` |\n| **#3 폴더 전환 시 체이닝 멈춤** | `invokeAgent` 시작 시 `octosSnapshot` 캡처, 이후 `peers`/`nextTargets` 계산에 스냅샷 사용 | `renderer/src/App.tsx` |\n| **#1 한글 멘션 파싱** | `parseMentions` + `onInputChange` + `pickMention` 정규식을 유니코드 지원 (`\\p{L}\\p{N}` + `u` flag)으로 변경 | `App.tsx`, `ChatPanel.tsx` |\n\n**핵심 변경:**\n- 앱이 백그라운드에 가거나 다른 스페이스로 이동해도 **진행 중인 에이전트 체인이 끊기지 않음**\n- 한글 에이전트명도 `@멘션`이 정상 작동 (팝업 + 파싱 + 삽입 모두)\n- 에이전트 ID/파일명 분리는 나중에 별도 작업으로 진행\n\n@planner 버그 3건 수정 + 빌드 확인 완료했습니다. 커밋 & 푸시할까요?",
       "ts": 1775460447346,
       "roomTs": 1775460447346
+    },
+    {
+      "role": "user",
+      "text": "오 땡큐 푸시 해줘",
+      "ts": 1775460488828,
+      "roomTs": 1775460488828
+    },
+    {
+      "role": "assistant",
+      "text": "## ✅ 푸시 완료!\n\n```\n8880a66  fix: 백그라운드 throttling, 폴더 전환 시 체이닝 멈춤, 한글 멘션 파싱 버그 수정\n→ origin/main 반영 ✅\n```\n\n버그 3건 수정 모두 올라갔습니다! 🐙",
+      "ts": 1775460518120,
+      "roomTs": 1775460518120
+    },
+    {
+      "role": "user",
+      "text": "planner just said in the group chat:\n\n\"ㅋㅋㅋ 맞아요 사장님 말씀 듣고 보니 오히려 그게 맞네요!\n\n## 🔄 기획 방향 수정: B안 (유니코드 지원) 확정!\n\n### 왜 오히려 좋은지\n\n1. **Octopal은 한국어 앱** — 에이전트 역할이 `기획자`, `디자이너`, `개발자`인데 이름도 한글이 자연스럽죠\n2. **`@기획자` 가 `@planner` 보다 직관적** — 한국 유저한테는 압도적으로 편함\n3. **영문 제한은 개발자 편의**였지 유저 편의가 아니었음 😅\n\n### 📌 정리\n\n| 항목 | 이전 방향 | 수정된 방향 |\n|------|----------|-----------|\n| 에이전트명 | 영문만 허용 (A안) | **한글 포함 유니코드 허용 (B안)** ✅ |\n| 멘션 파싱 | 영문만 | **유니코드 지원** ✅ (이미 수정됨) |\n| 후속 이슈 (영문 제한) | P2 등록 예정 | **취소** 🗑️ |\n\n@developer 방향 바뀌었어요! \n\n- 아까 말한 \"에이전트명 영문 제한\" 후속 이슈는 **없던 걸로** 합니다\n- 유니코드 멘션 지원이 정답이었어요 👍\n- 그대로 **커밋 & 푸시** 진행해주세요! 🐙\"\n\nplanner mentioned you (@developer) and may want your input. Respond to their message.",
+      "ts": 1775460523115,
+      "roomTs": 1775460523115
+    },
+    {
+      "role": "assistant",
+      "text": "@planner 넵 확인했습니다! 👍\n\n사실 이미 방금 푸시한 커밋에 **유니코드 멘션 지원이 포함**되어 있어요:\n\n```\n8880a66  fix: 백그라운드 throttling, 폴더 전환 시 체이닝 멈춤, 한글 멘션 파싱 버그 수정\n→ origin/main ✅\n```\n\n정규식을 `\\p{L}\\p{N}` + `u` 플래그로 이미 바꿔놨기 때문에 `@기획자`, `@디자이너` 같은 한글 멘션이 정상 작동합니다.\n\n**\"에이전트명 영문 제한\" 후속 이슈는 취소** — 동의합니다. 추가 작업 없이 현재 상태 그대로 B안이 반영된 셈이에요! 🐙",
+      "ts": 1775460559028,
+      "roomTs": 1775460559028
+    },
+    {
+      "role": "user",
+      "text": "아 그리고 우리 캐릭터 나옴 ㅋㅋ Users/gilhyun/dev/studio-h/Octopal/character/svgmaker-1-26HIGXM1mo0KkUCKuqik.svg ㅋㅋㅋㅋㅋ 로고로 반영해줄수 있어? 리드미에도 넣어줘 ㅋㅋㅋ",
+      "ts": 1775460689791,
+      "roomTs": 1775460689791
+    },
+    {
+      "role": "assistant",
+      "text": "✅ 빌드 성공!\n\n## 완료 요약\n\n| 항목 | 내용 |\n|------|------|\n| **SVG 로고** | `assets/logo.svg`로 복사 |\n| **PNG 아이콘** | `assets/icon-256.png`, `icon-512.png`, `icon-1024.png` 생성 |\n| **macOS .icns** | `assets/icon.icns` 생성 |\n| **Electron 창 아이콘** | `main.ts`에 `icon: iconPath` 추가 |\n| **Favicon** | `index.html`에 `logo.svg` favicon 추가 |\n| **Vite publicDir** | `assets/` 폴더를 public 디렉토리로 설정 |\n| **README.md** | 로고 + 프로젝트 소개 + 구조 + 시작 가이드 작성 |\n\n캐릭터 귀엽네요 ㅋㅋ 빨간 문어 🐙 \n\n@designer README에 로고가 들어갔는데 디자인 관점에서 README 레이아웃이나 추가할 내용 있으면 의견 부탁합니다!",
+      "ts": 1775460852430,
+      "roomTs": 1775460852430
+    },
+    {
+      "role": "user",
+      "text": "아 위키 눌렀을때 중앙 채팅영역만 바뀌고 오른쪽 패널이 남아있고 폴더도 선택상태네 폴더 선택 안된상태로 위키가 선택되야 하고 위키 화면을 오른쪽 화면까지 쫙 넓혀줘",
+      "ts": 1775463663510,
+      "roomTs": 1775463663510
+    },
+    {
+      "role": "assistant",
+      "text": "✅ 빌드 성공!\n\n## 수정 완료\n\n| 변경 | 내용 |\n|------|------|\n| **위키 클릭 시 폴더 선택 해제** | `setActiveFolder(null)` 호출 → 좌측 폴더 목록에서 active 상태 해제 |\n| **오른쪽 패널 숨김** | `centerTab === 'chat'`일 때만 RightSidebar 렌더링 → 위키가 전체 너비 사용 |\n| **위키→채팅 복귀** | 다시 위키 버튼 누르면 첫 번째 폴더 자동 선택 후 채팅 탭으로 전환 |\n\n위키 누르면 폴더 선택 풀리고, 오른쪽 에이전트 패널 없이 위키가 쫙 펼쳐집니다! 🐙",
+      "ts": 1775463758469,
+      "roomTs": 1775463758469
+    },
+    {
+      "role": "user",
+      "text": "푸시해줘",
+      "ts": 1775465668218,
+      "roomTs": 1775465668218
+    },
+    {
+      "role": "assistant",
+      "text": "## ✅ 푸시 완료!\n\n```\na1971e3  feat: 로고/아이콘 반영 + README 작성 + 위키 화면 전체 너비 레이아웃 수정\n→ origin/main ✅\n```\n\n로고, README, 위키 레이아웃 수정 모두 반영됐습니다! 🐙",
+      "ts": 1775465697822,
+      "roomTs": 1775465697822
+    },
+    {
+      "role": "user",
+      "text": "character 폴더에 character.png 로 넣어놨어 적용해줘",
+      "ts": 1775466275005,
+      "roomTs": 1775466275005
+    },
+    {
+      "role": "assistant",
+      "text": "빌드 성공! ✅\n\n## 적용 완료\n\n| 항목 | 내용 |\n|------|------|\n| **logo.png** | `character/character.png` → `assets/logo.png` 복사 |\n| **아이콘** | 256/512/1024 PNG + macOS `.icns` 재생성 |\n| **Favicon** | `index.html` → `logo.png`으로 변경 |\n| **README** | 로고 이미지 → `logo.png`으로 변경 |\n| **Electron 창 아이콘** | 기존 `icon-512.png` 참조 → 새 캐릭터로 교체됨 |\n\n새 빨간 문어 캐릭터가 앱 전체에 반영됐습니다! 🐙",
+      "ts": 1775466319851,
+      "roomTs": 1775466319851
+    },
+    {
+      "role": "user",
+      "text": "아 일랙트론 앱 아이콘은 못바꾸나? 그리고 일랙트론 앱 열면 타이틀이나 앱 이름도 바꾸고싶어",
+      "ts": 1775466397299,
+      "roomTs": 1775466397299
+    },
+    {
+      "role": "assistant",
+      "text": "✅ 빌드 성공!\n\n## 적용 완료\n\n| 항목 | 변경 내용 |\n|------|----------|\n| **macOS Dock 아이콘** | `app.dock.setIcon()` 으로 커스텀 캐릭터 아이콘 강제 설정 |\n| **앱 이름 (메뉴바)** | `app.setName('Octopal')` → 좌상단 메뉴바에 \"Octopal\" 표시 |\n| **윈도우 타이틀** | BrowserWindow에 `title: 'Octopal'` 명시 |\n| **package.json** | `productName: \"Octopal\"` 추가 (빌드/패키징 시 사용) |\n\n이제 앱 실행하면:\n- **macOS Dock** → 빨간 문어 캐릭터 🐙\n- **메뉴바** → \"Octopal\" (기존 \"Electron\" 대신)\n- **윈도우 타이틀** → \"Octopal\"\n\n`npm run dev`로 확인해보세요!",
+      "ts": 1775466487018,
+      "roomTs": 1775466487018
+    },
+    {
+      "role": "user",
+      "text": "리드미에도 넣어줘",
+      "ts": 1775466632598,
+      "roomTs": 1775466632598
+    },
+    {
+      "role": "assistant",
+      "text": "README에는 이미 `assets/logo.png`가 들어가 있는데, 혹시 `character/character.png`를 직접 참조하고 싶으신 건가요? 아니면 README에 캐릭터 이미지가 안 보이는 상황인가요?\n\n현재 README 상단에:\n```html\n<p align=\"center\">\n  <img src=\"assets/logo.png\" alt=\"Octopal Logo\" width=\"180\" />\n</p>\n```\n\n이렇게 로고가 포함되어 있습니다. `assets/logo.png`가 `character/character.png`에서 복사된 파일이라 동일한 캐릭터예요.\n\n혹시 **다른 걸 추가**하고 싶으신 거면 알려주세요! 예를 들어:\n- 캐릭터 크기를 더 크게?\n- 캐릭터 설명 문구 추가?\n- SVG 원본도 같이 보여주기?",
+      "ts": 1775466654030,
+      "roomTs": 1775466654030
+    },
+    {
+      "role": "user",
+      "text": "아 그럼 푸시해줘",
+      "ts": 1775466664878,
+      "roomTs": 1775466664878
+    },
+    {
+      "role": "assistant",
+      "text": "## ✅ 푸시 완료!\n\n```\n10a543e  feat: 캐릭터 아이콘 적용 + 앱 이름 Octopal로 변경\n→ origin/main ✅\n```\n\n캐릭터 아이콘, 앱 이름 변경, favicon 등 모두 반영됐습니다! 🐙",
+      "ts": 1775466689193,
+      "roomTs": 1775466689193
+    },
+    {
+      "role": "user",
+      "text": "아 로고에 여백이 좀 있어야 하네 이미지 다시 줄께",
+      "ts": 1775467888318,
+      "roomTs": 1775467888318
+    },
+    {
+      "role": "assistant",
+      "text": "네, 알겠습니다! 여백 있는 새 이미지 주시면 바로 적용할게요 🐙",
+      "ts": 1775467897182,
+      "roomTs": 1775467897182
+    },
+    {
+      "role": "user",
+      "text": "character/character.png 다시 올림",
+      "ts": 1775468192075,
+      "roomTs": 1775468192075
+    },
+    {
+      "role": "assistant",
+      "text": "빌드 성공! ✅\n\n## 여백 있는 새 캐릭터 적용 완료 🐙\n\n| 파일 | 상태 |\n|------|------|\n| `assets/logo.png` | ✅ 교체 |\n| `assets/icon-256/512/1024.png` | ✅ 재생성 |\n| `assets/icon.icns` | ✅ 재생성 |\n\n`npm run dev`로 확인해보세요! 푸시도 할까요?",
+      "ts": 1775468224427,
+      "roomTs": 1775468224427
+    },
+    {
+      "role": "user",
+      "text": "ㅇㅇ",
+      "ts": 1775468256087,
+      "roomTs": 1775468256087
+    },
+    {
+      "role": "assistant",
+      "text": "## ✅ 푸시 완료!\n\n```\n20aad8e  fix: 여백 추가된 캐릭터 이미지로 아이콘 교체\n→ origin/main ✅\n```\n\n여백 있는 새 캐릭터로 아이콘 모두 반영됐습니다! 🐙",
+      "ts": 1775468274071,
+      "roomTs": 1775468274071
+    },
+    {
+      "role": "user",
+      "text": "채팅창에 대화내역 몇개정도까지 유지하면 버벅이지 않을려나? 로컬이라 많아도 괜찮을려나?",
+      "ts": 1775469821825,
+      "roomTs": 1775469821825
+    },
+    {
+      "role": "assistant",
+      "text": "## 분석 결과\n\n현재 구현 상태를 보면:\n\n| 항목 | 현재 상태 |\n|------|-----------|\n| **렌더링** | `.map()`으로 전체 렌더링 (가상 스크롤 ❌) |\n| **페이지네이션** | 없음 ❌ |\n| **저장** | `room-log.json` + `.octo` 파일 (파일 기반) |\n| **로드** | 폴더 전환 시 전체 히스토리 한번에 로드 |\n\n### 성능 병목 포인트\n\n1. **DOM 노드 수** — 가상 스크롤이 없어서 메시지가 많으면 DOM이 무거워짐\n2. **MarkdownRenderer** — 에이전트 메시지마다 마크다운 파싱/렌더링\n3. **파일 로드** — JSON 파일 통째로 읽기\n\n### 현실적인 가이드라인\n\n| 메시지 수 | 예상 체감 |\n|-----------|-----------|\n| **~500개** | 쾌적 ✅ |\n| **500~2,000개** | 약간 느려질 수 있음 ⚠️ (특히 긴 마크다운 응답) |\n| **2,000개+** | 스크롤/전환 시 버벅임 가능 🔴 |\n\n로컬이라 네트워크 지연은 없지만, **DOM 렌더링 비용**은 동일합니다. Electron이라고 마법은 아니에요 😅\n\n### 추후 개선 방향 (필요 시)\n\n1. **가상 스크롤** (`react-virtuoso` 등) — 화면에 보이는 것만 렌더\n2. **페이지네이션** — 최근 100개만 로드, 위로 스크롤하면 추가 로드\n3. **마크다운 메모이제이션** — `React.memo`로 이미 렌더된 메시지 캐싱\n\n지금 당장은 **500개 이하**면 문제없을 거고, 나중에 사용 패턴 보면서 가상 스크롤 넣으면 될 것 같습니다. 바로 적용할까요?",
+      "ts": 1775469882851,
+      "roomTs": 1775469882851
+    },
+    {
+      "role": "user",
+      "text": "ㅇㅋ 페이징 나중에 넣어야겠다 우선 오른쪽 패널에 RECENT ACTIVITY 를 왼쪽 패널 위키 아래에 넣자 클릭하면 채팅영역 오른쪽 패널 전체 를 사용하도록 하고",
+      "ts": 1775469978453,
+      "roomTs": 1775469978453
+    },
+    {
+      "role": "assistant",
+      "text": "빌드 성공! 이제 결과를 확인해보겠습니다.\n\n## ✅ 완료! RECENT ACTIVITY 이동\n\n### 변경 사항\n\n| 파일 | 변경 내용 |\n|------|-----------|\n| `LeftSidebar.tsx` | Wiki 아래에 **Activity** 네비게이션 버튼 추가 (카운트 배지 포함) |\n| `RightSidebar.tsx` | Activity 섹션 제거 (Agents 목록만 남김) |\n| `ActivityPanel.tsx` | **새 컴포넌트** - 전체 너비로 활동 로그 표시 |\n| `App.tsx` | `centerTab`에 `'activity'` 추가, ActivityPanel 렌더링 로직 |\n| `globals.css` | ActivityPanel 스타일 + 네비 배지 스타일 |\n\n### 동작 방식\n\n1. 왼쪽 사이드바 Wiki 아래에 **Activity** 버튼 (활동 개수 배지)\n2. 클릭하면 **채팅 영역 + 오른쪽 패널 전체**를 Activity 패널로 사용\n3. 다시 클릭하거나 폴더를 클릭하면 채팅으로 복귀\n\n`npm run dev`로 확인해보세요!\n\n@designer, Activity 패널의 레이아웃과 스타일 리뷰 부탁드립니다. 특히 전체 너비로 펼쳐졌을 때 항목 배치나 여백 등 개선 포인트가 있으면 알려주세요.",
+      "ts": 1775470201455,
+      "roomTs": 1775470201455
+    },
+    {
+      "role": "user",
+      "text": "채팅에 에이전트가 작업중일때 표시해주는 부분있자나 그부분이 진행중일때 스페이스 이동하면 사라지는거같네 작업은 계속 진행 되는것 같고",
+      "ts": 1775470456352,
+      "roomTs": 1775470456352
+    },
+    {
+      "role": "assistant",
+      "text": "빌드 성공! ✅\n\n## 🐛 버그 수정 완료\n\n### 원인\n폴더 전환 시 `loadHistory()`가 디스크에서 읽어온 히스토리로 **메시지 상태를 통째로 덮어씌움** → 메모리에만 있던 `pending` (작업중) 메시지가 사라짐\n\n### 수정 내용\n`App.tsx`의 폴더 전환 로직에서 디스크 히스토리 로드 시 **기존 pending 메시지를 보존**하도록 merge 처리:\n\n```typescript\n// 기존: 덮어쓰기\nsetMessages(prev => ({ ...prev, [activeFolder]: history }))\n\n// 수정: pending 메시지 보존\nconst pendingMessages = existing.filter(m => m.pending)\nconst missingPending = pendingMessages.filter(m => !historyIds.has(m.id))\nreturn { ...prev, [activeFolder]: [...history, ...missingPending] }\n```\n\n이제 다른 스페이스 갔다가 돌아와도 \"Thinking…\" 같은 작업중 표시가 유지됩니다. `npm run dev`로 확인해보세요!",
+      "ts": 1775470547491,
+      "roomTs": 1775470547491
+    },
+    {
+      "role": "user",
+      "text": "채팅 대화 내용 페이징 까지 지금 해버릴까 폴더나 스페이스 왔다갔다 할때 최적화 되게 50개 정도로 끊고 맨 상단으로 스크롤 했을때 추가 대화 있으면 추가 로드 하게 하면 될거같아",
+      "ts": 1775470989396,
+      "roomTs": 1775470989396
+    },
+    {
+      "role": "assistant",
+      "text": "빌드 성공! ✅\n\n## ✅ 메시지 페이징 구현 완료\n\n### 변경 파일\n\n| 파일 | 변경 내용 |\n|------|-----------|\n| `src/main.ts` | `folder:loadHistoryPaged` IPC 핸들러 추가 (`limit`, `beforeTs` 파라미터) |\n| `src/preload.ts` | `loadHistoryPaged` API 메서드 추가 |\n| `renderer/src/global.d.ts` | 타입 정의 추가 |\n| `renderer/src/App.tsx` | 초기 50개 로드 + `loadMoreMessages()` 함수 |\n| `renderer/src/components/ChatPanel.tsx` | 상단 스크롤 감지 → 추가 로드 + 스크롤 위치 보존 |\n| `renderer/src/globals.css` | 로딩 인디케이터 스타일 |\n\n### 동작 방식\n\n1. **폴더 진입** → 최근 **50개** 메시지만 로드\n2. **위로 스크롤** (상단 60px 이내) → 자동으로 이전 50개 추가 로드\n3. **스크롤 위치 보존** — 로드 후 `scrollHeight` 차이만큼 보정하여 화면 점프 방지\n4. 더 이상 이전 메시지가 없으면 로드 중단\n5. 기존 pending 메시지 보존 로직도 그대로 유지\n\n`npm run dev`로 확인해보세요!",
+      "ts": 1775471198031,
+      "roomTs": 1775471198031
+    },
+    {
+      "role": "user",
+      "text": "페이징 추가되고서 처음 로드시나 폴더탭이동등 스크롤이 맨 아래로 안내려가고 중간 아래 정도 까지만 내려가네 맨 하단 메시지로 가야해",
+      "ts": 1775472345099,
+      "roomTs": 1775472345099
+    },
+    {
+      "role": "assistant",
+      "text": "빌드 성공! ✅\n\n## 🐛 스크롤 버그 수정 완료\n\n### 원인\n페이징 추가 후 폴더 전환/초기 로드 시 `isNearBottomRef`가 리셋되지 않아서 `scrollIntoView`가 실행되지 않았음\n\n### 수정 내용\n\n1. **폴더 전환 시 스크롤 상태 리셋** — `activeFolder` 변경 시 `isNearBottomRef = true`로 초기화\n2. **초기 로드 시 `instant` 스크롤** — `smooth` 대신 `instant`로 즉시 맨 아래로 이동 (깜빡임 방지)\n3. **`requestAnimationFrame`** — DOM 렌더 완료 후 스크롤 실행하여 확실하게 바닥으로 이동\n\n`npm run dev`로 확인해보세요!",
+      "ts": 1775472390718,
+      "roomTs": 1775472390718
     }
   ],
   "permissions": {

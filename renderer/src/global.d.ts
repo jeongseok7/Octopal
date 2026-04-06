@@ -44,6 +44,8 @@ interface Window {
     removeFolder: (workspaceId: string, folderPath: string) => Promise<AppState>
     listOctos: (folderPath: string) => Promise<OctoFile[]>
     loadHistory: (folderPath: string) => Promise<HistoryMessage[]>
+    loadHistoryPaged: (params: { folderPath: string; limit: number; beforeTs?: number }) =>
+      Promise<{ messages: HistoryMessage[]; hasMore: boolean }>
     appendUserMessage: (params: {
       folderPath: string
       message: { id: string; ts: number; text: string; attachments?: any[] }

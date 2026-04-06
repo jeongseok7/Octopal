@@ -4,6 +4,7 @@ import { LeftSidebar } from './components/LeftSidebar'
 import { ChatPanel } from './components/ChatPanel'
 import { WikiPanel } from './components/WikiPanel'
 import { RightSidebar } from './components/RightSidebar'
+import { ActivityPanel } from './components/ActivityPanel'
 import { CreateAgentModal } from './components/modals/CreateAgentModal'
 import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal'
 import { EditAgentModal } from './components/modals/EditAgentModal'
@@ -13,6 +14,10 @@ export function App() {
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [octos, setOctos] = useState<OctoFile[]>([])
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
+  // Track whether there are more (older) messages to load per folder
+  const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({})
+  const [loadingMore, setLoadingMore] = useState(false)
+  const PAGE_SIZE = 50
   // Activity log of concrete actions (write/edit/bash/webfetch), keyed by folder
   const [activityLog, setActivityLog] = useState<Record<string, ActivityLogEntry[]>>({})
   const [input, setInput] = useState('')
@@ -22,7 +27,7 @@ export function App() {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
-  const [centerTab, setCenterTab] = useState<'chat' | 'wiki'>('chat')
+  const [centerTab, setCenterTab] = useState<'chat' | 'wiki' | 'activity'>('chat')
 
   // runId -> { folderPath, messageId } so activity events can find the right bubble
   const runMapRef = useRef<Map<string, { folderPath: string; messageId: string }>>(new Map())
@@ -70,17 +75,60 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activeWorkspaceId])
 
-  // Load octos + history when folder changes
+  // Load octos + history when folder changes (paged — last PAGE_SIZE messages)
   useEffect(() => {
     if (!activeFolder) {
       setOctos([])
       return
     }
     window.api.listOctos(activeFolder).then(setOctos)
-    window.api.loadHistory(activeFolder).then((history) => {
-      setMessages((prev) => ({ ...prev, [activeFolder]: history }))
+    window.api.loadHistoryPaged({ folderPath: activeFolder, limit: PAGE_SIZE }).then(({ messages: history, hasMore }) => {
+      setHasMoreMessages((prev) => ({ ...prev, [activeFolder]: hasMore }))
+      setMessages((prev) => {
+        // Preserve in-progress (pending) messages that haven't been saved to disk yet
+        const existing = prev[activeFolder] || []
+        const pendingMessages = existing.filter((m) => m.pending)
+        if (pendingMessages.length === 0) {
+          return { ...prev, [activeFolder]: history }
+        }
+        // Merge: disk history + any pending messages not already in history
+        const historyIds = new Set(history.map((m) => m.id))
+        const missingPending = pendingMessages.filter((m) => !historyIds.has(m.id))
+        return { ...prev, [activeFolder]: [...history, ...missingPending] }
+      })
     })
   }, [activeFolder])
+
+  // Load older messages (called when user scrolls to top)
+  const loadMoreMessages = async () => {
+    if (!activeFolder || loadingMore) return
+    if (!hasMoreMessages[activeFolder]) return
+
+    setLoadingMore(true)
+    const currentMessages = messages[activeFolder] || []
+    // Find the oldest non-pending message's timestamp
+    const oldestTs = currentMessages.find((m) => !m.pending)?.ts
+    if (oldestTs == null) {
+      setLoadingMore(false)
+      return
+    }
+
+    const { messages: older, hasMore } = await window.api.loadHistoryPaged({
+      folderPath: activeFolder,
+      limit: PAGE_SIZE,
+      beforeTs: oldestTs,
+    })
+
+    setHasMoreMessages((prev) => ({ ...prev, [activeFolder]: hasMore }))
+    setMessages((prev) => {
+      const existing = prev[activeFolder] || []
+      // Deduplicate by id
+      const existingIds = new Set(existing.map((m) => m.id))
+      const newOlder = older.filter((m) => !existingIds.has(m.id))
+      return { ...prev, [activeFolder]: [...newOlder, ...existing] }
+    })
+    setLoadingMore(false)
+  }
 
   // Watch for .octo file changes in the active folder
   useEffect(() => {
@@ -549,6 +597,7 @@ export function App() {
         activeFolder={activeFolder}
         centerTab={centerTab}
         setCenterTab={setCenterTab}
+        activityCount={folderActivity.length}
         workspaceMenuOpen={workspaceMenuOpen}
         setWorkspaceMenuOpen={setWorkspaceMenuOpen}
         setActiveFolder={setActiveFolder}
@@ -559,7 +608,7 @@ export function App() {
         setShowCreateWorkspace={setShowCreateWorkspace}
       />
 
-      <div className="center-panel">
+      <div className={`center-panel ${centerTab === 'activity' ? 'center-panel--wide' : ''}`}>
         {centerTab === 'chat' ? (
           <ChatPanel
             activeFolder={activeFolder}
@@ -575,7 +624,12 @@ export function App() {
             send={send}
             onApproveHandoff={approveHandoff}
             onDismissHandoff={dismissHandoff}
+            hasMoreMessages={!!hasMoreMessages[activeFolder || '']}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreMessages}
           />
+        ) : centerTab === 'activity' ? (
+          <ActivityPanel activityLog={folderActivity} octos={octos} />
         ) : state.activeWorkspaceId ? (
           <WikiPanel workspaceId={state.activeWorkspaceId} />
         ) : null}

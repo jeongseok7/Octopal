@@ -357,59 +357,90 @@ ipcMain.handle('room:appendUser', (_event, params: {
   return { ok: true }
 })
 
+/** Collect ALL messages from room-log + .octo files, sorted chronologically. */
+function collectAllMessages(folderPath: string) {
+  const allMessages: Array<{
+    id: string
+    agentName: string
+    text: string
+    ts: number
+    attachments?: any[]
+  }> = []
+
+  // 1) User messages from room-log.json
+  const roomLog = readRoomLog(folderPath)
+  for (const m of roomLog) {
+    allMessages.push({
+      id: `room-user-${m.ts}`,
+      agentName: 'user',
+      text: m.text,
+      ts: m.ts,
+      attachments: m.attachments,
+    })
+  }
+
+  // 2) Assistant messages from each .octo history
+  const files = fs.readdirSync(folderPath).filter((f) => f.endsWith('.octo'))
+  for (const f of files) {
+    const fullPath = path.join(folderPath, f)
+    try {
+      const octo = JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
+      const name = octo.name || f.replace('.octo', '')
+      const history = octo.history || []
+      for (let i = 0; i < history.length; i++) {
+        const msg = history[i]
+        // Skip user messages from .octo history — room-log is the source of truth now.
+        if (msg.role === 'user') continue
+        if (msg.roomTs) {
+          allMessages.push({
+            id: `${f}-${i}-${msg.roomTs}`,
+            agentName: name,
+            text: msg.text,
+            ts: msg.roomTs,
+          })
+        }
+      }
+    } catch {}
+  }
+
+  // Sort chronologically
+  allMessages.sort((a, b) => a.ts - b.ts)
+  return allMessages
+}
+
 ipcMain.handle('folder:loadHistory', (_event, folderPath: string) => {
-  // Merge user messages (from room-log) with assistant messages (from .octo files)
   try {
     if (!fs.existsSync(folderPath)) return []
-    const allMessages: Array<{
-      id: string
-      agentName: string
-      text: string
-      ts: number
-      attachments?: any[]
-    }> = []
-
-    // 1) User messages from room-log.json
-    const roomLog = readRoomLog(folderPath)
-    for (const m of roomLog) {
-      allMessages.push({
-        id: `room-user-${m.ts}`,
-        agentName: 'user',
-        text: m.text,
-        ts: m.ts,
-        attachments: m.attachments,
-      })
-    }
-
-    // 2) Assistant messages from each .octo history
-    const files = fs.readdirSync(folderPath).filter((f) => f.endsWith('.octo'))
-    for (const f of files) {
-      const fullPath = path.join(folderPath, f)
-      try {
-        const octo = JSON.parse(fs.readFileSync(fullPath, 'utf-8'))
-        const name = octo.name || f.replace('.octo', '')
-        const history = octo.history || []
-        for (let i = 0; i < history.length; i++) {
-          const msg = history[i]
-          // Skip user messages from .octo history — room-log is the source of truth now.
-          if (msg.role === 'user') continue
-          if (msg.roomTs) {
-            allMessages.push({
-              id: `${f}-${i}-${msg.roomTs}`,
-              agentName: name,
-              text: msg.text,
-              ts: msg.roomTs,
-            })
-          }
-        }
-      } catch {}
-    }
-
-    // Sort chronologically
-    allMessages.sort((a, b) => a.ts - b.ts)
-    return allMessages
+    return collectAllMessages(folderPath)
   } catch {
     return []
+  }
+})
+
+ipcMain.handle('folder:loadHistoryPaged', (_event, params: {
+  folderPath: string
+  limit: number
+  beforeTs?: number
+}) => {
+  try {
+    if (!fs.existsSync(params.folderPath)) return { messages: [], hasMore: false }
+    const all = collectAllMessages(params.folderPath)
+
+    let slice: typeof all
+    if (params.beforeTs != null) {
+      // Find the index of the first message with ts < beforeTs (going backwards)
+      const cutoff = all.filter((m) => m.ts < params.beforeTs!)
+      slice = cutoff.slice(-params.limit) // take last N before the cutoff
+      const hasMore = cutoff.length > params.limit
+      return { messages: slice, hasMore }
+    } else {
+      // Initial load: take the last N messages
+      slice = all.slice(-params.limit)
+      const hasMore = all.length > params.limit
+      return { messages: slice, hasMore }
+    }
+  } catch {
+    return { messages: [], hasMore: false }
   }
 })
 

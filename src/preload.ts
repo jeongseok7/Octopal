@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('folder:remove', { workspaceId, folderPath }),
   listOctos: (folderPath: string) => ipcRenderer.invoke('folder:listOctos', folderPath),
   loadHistory: (folderPath: string) => ipcRenderer.invoke('folder:loadHistory', folderPath),
+  loadHistoryPaged: (params: { folderPath: string; limit: number; beforeTs?: number }) =>
+    ipcRenderer.invoke('folder:loadHistoryPaged', params),
   appendUserMessage: (params: {
     folderPath: string
     message: { id: string; ts: number; text: string; attachments?: any[] }
