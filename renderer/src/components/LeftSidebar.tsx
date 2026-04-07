@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { basename } from '../utils'
-import { Plus, FolderOpen, ChevronDown, X, BookOpen, Activity } from 'lucide-react'
+import { Plus, FolderOpen, ChevronDown, X, BookOpen, Activity, Settings } from 'lucide-react'
 
 interface LeftSidebarProps {
   activeWorkspace: Workspace | null
@@ -137,6 +137,13 @@ export function LeftSidebar({
           {activityCount > 0 && (
             <span className="sidebar-nav-badge">{activityCount}</span>
           )}
+        </button>
+        <button
+          className="sidebar-nav-item"
+          disabled={!state.activeWorkspaceId}
+        >
+          <Settings size={16} />
+          <span>Settings</span>
         </button>
       </div>
       <div className="project-list">

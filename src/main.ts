@@ -579,6 +579,23 @@ ipcMain.handle('octo:create', (_event, params: { folderPath: string; name: strin
   const { folderPath, name, role, icon, color, permissions } = params
   const safeName = name.trim()
   if (!safeName) return { ok: false, error: 'Name is required' }
+
+  // Enforce max 10 visible (non-hidden) agents per folder
+  const MAX_VISIBLE_AGENTS = 10
+  try {
+    const existingFiles = fs.readdirSync(folderPath).filter((f) => f.endsWith('.octo'))
+    let visibleCount = 0
+    for (const f of existingFiles) {
+      try {
+        const content = JSON.parse(fs.readFileSync(path.join(folderPath, f), 'utf-8'))
+        if (!content.hidden) visibleCount++
+      } catch { /* skip unreadable files */ }
+    }
+    if (visibleCount >= MAX_VISIBLE_AGENTS) {
+      return { ok: false, error: `AGENT_LIMIT:${MAX_VISIBLE_AGENTS}` }
+    }
+  } catch { /* folder read failed — continue with creation */ }
+
   const fileName = safeName.endsWith('.octo') ? safeName : `${safeName}.octo`
   const filePath = path.join(folderPath, fileName)
   if (fs.existsSync(filePath)) {
@@ -617,6 +634,7 @@ ipcMain.handle('folder:listOctos', (_event, folderPath: string) => {
             name: content.name || f.replace('.octo', ''),
             role: content.role || '',
             icon: content.icon || 'bot',
+            hidden: content.hidden || false,
             permissions: content.permissions || null,
           }
         } catch {

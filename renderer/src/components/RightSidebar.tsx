@@ -35,12 +35,12 @@ export function RightSidebar({
         )}
       </div>
       <div className="agent-list">
-        {octos.length === 0 && (
+        {octos.filter((r) => !r.hidden).length === 0 && (
           <div className="empty-agents">
             {activeFolder ? 'No .octo files in this folder' : 'Open a folder first'}
           </div>
         )}
-        {octos.map((r) => {
+        {octos.filter((r) => !r.hidden).map((r) => {
           const hasPerms =
             r.permissions &&
             (r.permissions.fileWrite === true ||

@@ -12,6 +12,7 @@ interface OctoFile {
   role: string
   icon: string
   color?: string
+  hidden?: boolean
   permissions?: OctoPermissions | null
 }
 

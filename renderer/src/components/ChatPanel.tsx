@@ -78,6 +78,7 @@ export function ChatPanel({
   const [isDragging, setIsDragging] = useState(false)
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [showScrollDown, setShowScrollDown] = useState(false)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const dragCounterRef = useRef(0)
   const initialScrollDoneRef = useRef<string | null>(null)
 
@@ -301,6 +302,7 @@ export function ChatPanel({
     if (match) {
       setMentionOpen(true)
       setMentionQuery(match[1])
+      setMentionIndex(0)
     } else {
       setMentionOpen(false)
     }
@@ -313,6 +315,31 @@ export function ChatPanel({
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Mention popup keyboard navigation
+    if (mentionOpen && filteredMentions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex((prev) => (prev + 1) % filteredMentions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex((prev) => (prev - 1 + filteredMentions.length) % filteredMentions.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
+        e.preventDefault()
+        pickMention(filteredMentions[mentionIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionOpen(false)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       // Ignore Enter while the IME is still composing (Korean/Japanese/Chinese).
       // Without this, the last jamo gets committed as its own separate message.
@@ -526,7 +553,7 @@ export function ChatPanel({
 
       <footer className="composer">
         {mentionOpen && filteredMentions.length > 0 && (
-          <MentionPopup filteredMentions={filteredMentions} pickMention={pickMention} octos={octos} />
+          <MentionPopup filteredMentions={filteredMentions} pickMention={pickMention} octos={octos} selectedIndex={mentionIndex} />
         )}
 
         {/* Attachment preview */}

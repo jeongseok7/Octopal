@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { EmojiPicker } from '../EmojiPicker'
+import { AlertTriangle } from 'lucide-react'
 
 interface CreateAgentModalProps {
   folderPath: string
@@ -18,9 +19,11 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
   const [allowPaths, setAllowPaths] = useState('')
   const [denyPaths, setDenyPaths] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [limitReached, setLimitReached] = useState<number | null>(null)
 
   const create = async () => {
     setError(null)
+    setLimitReached(null)
     const permissions: OctoPermissions = {
       fileWrite,
       bash,
@@ -42,8 +45,35 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
       color: color || undefined,
       permissions,
     })
-    if (res.ok) onCreated()
-    else setError(res.error)
+    if (res.ok) {
+      onCreated()
+    } else if (res.error.startsWith('AGENT_LIMIT:')) {
+      const max = parseInt(res.error.split(':')[1], 10)
+      setLimitReached(max)
+    } else {
+      setError(res.error)
+    }
+  }
+
+  // Agent limit popup
+  if (limitReached !== null) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+            <AlertTriangle size={36} style={{ color: 'var(--warning, #f0a030)' }} />
+            <div className="modal-title" style={{ marginBottom: 0 }}>에이전트 제한</div>
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+              폴더당 최대 <strong>{limitReached}명</strong>의 에이전트만 생성할 수 있습니다.<br />
+              기존 에이전트를 삭제한 후 다시 시도해주세요.
+            </p>
+          </div>
+          <div className="modal-actions">
+            <button className="btn-primary" onClick={onClose}>확인</button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
