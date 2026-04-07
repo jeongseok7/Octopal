@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { colorForName } from '../utils'
 import { Zap, MoreHorizontal, Plus } from 'lucide-react'
 import type { ActivityLogEntry } from '../types'
@@ -20,15 +21,17 @@ export function RightSidebar({
   setEditingAgent,
   setShowCreateAgent,
 }: RightSidebarProps) {
+  const { t } = useTranslation()
+
   return (
     <aside className="right-sidebar">
       <div className="sidebar-header drag">
-        <span className="section-title">Agents</span>
+        <span className="section-title">{t('agents.title')}</span>
         {activeFolder && (
           <button
             className="header-add-btn"
             onClick={() => setShowCreateAgent(true)}
-            title="Add agent"
+            title={t('agents.addAgent')}
           >
             <Plus size={14} />
           </button>
@@ -37,7 +40,7 @@ export function RightSidebar({
       <div className="agent-list">
         {octos.filter((r) => !r.hidden).length === 0 && (
           <div className="empty-agents">
-            {activeFolder ? 'No .octo files in this folder' : 'Open a folder first'}
+            {activeFolder ? t('agents.noAgents') : t('agents.openFolderFirst')}
           </div>
         )}
         {octos.filter((r) => !r.hidden).map((r) => {
@@ -65,13 +68,13 @@ export function RightSidebar({
                 e.preventDefault()
                 setEditingAgent(r)
               }}
-              title="Click to mention, right-click to edit"
+              title={t('agents.clickToMention')}
             >
               <AgentAvatar name={r.name} icon={r.icon} showOnlineDot />
               <div className="agent-info">
                 <div className="agent-name">
                   {r.name}
-                  {hasPerms && <span className="agent-badge" title="Can use tools"><Zap size={12} /></span>}
+                  {hasPerms && <span className="agent-badge" title={t('agents.canUseTools')}><Zap size={12} /></span>}
                 </div>
                 <div className="agent-role">{r.role || 'agent'}</div>
               </div>
@@ -81,7 +84,7 @@ export function RightSidebar({
                   e.stopPropagation()
                   setEditingAgent(r)
                 }}
-                title="Edit agent"
+                title={t('agents.editAgent')}
               >
                 <MoreHorizontal size={16} />
               </button>

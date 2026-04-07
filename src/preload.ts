@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
     collaborators?: Array<{ name: string; role: string }>
     isLeader?: boolean
     imagePaths?: string[]
+    textPaths?: string[]
   }) => ipcRenderer.invoke('octo:sendMessage', params),
   onActivity: (cb: (data: { runId: string; text: string }) => void) => {
     const handler = (_event: any, data: { runId: string; text: string }) => cb(data)
@@ -101,4 +102,19 @@ contextBridge.exposeInMainWorld('api', {
   wikiDelete: (params: { workspaceId: string; name: string }) =>
     ipcRenderer.invoke('wiki:delete', params),
   stopAllAgents: () => ipcRenderer.invoke('agent:stopAll'),
+  getPlatform: () => ipcRenderer.invoke('app:getPlatform'),
+
+  // ── Settings ──
+  loadSettings: () => ipcRenderer.invoke('settings:load'),
+  saveSettings: (settings: any) => ipcRenderer.invoke('settings:save', settings),
+  getVersion: () => ipcRenderer.invoke('settings:getVersion'),
+
+  // ── Multi-window ──
+  newWindow: () => ipcRenderer.invoke('window:new'),
+  getWindowCount: () => ipcRenderer.invoke('window:count'),
+  onWindowLimitReached: (cb: (maxWindows: number) => void) => {
+    const handler = (_event: any, maxWindows: number) => cb(maxWindows)
+    ipcRenderer.on('window:limitReached', handler)
+    return () => ipcRenderer.removeListener('window:limitReached', handler)
+  },
 })

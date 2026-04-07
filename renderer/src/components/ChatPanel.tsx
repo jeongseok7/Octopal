@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { basename } from '../utils'
 import { MentionPopup } from './MentionPopup'
 import { AgentAvatar } from './AgentAvatar'
 import type { Attachment, Message } from '../types'
-import { Paperclip, Download, FileText, X, Send, Square, ImageOff, ArrowDown } from 'lucide-react'
+import { Paperclip, Download, FileText, X, Send, Square, ImageOff, ArrowDown, PanelLeftOpen, PanelRightOpen, PanelRightClose, Code, ChevronDown, ChevronRight } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 
 /** Pending attachment before send — holds local preview data */
@@ -12,7 +13,11 @@ export interface PendingAttachment {
   file: File
   previewUrl: string  // object URL for image preview
   type: 'image' | 'text'
+  textContent?: string   // raw text for pasted-text attachments (for preview)
+  isPastedText?: boolean // flag to distinguish pasted text from file-picker text files
 }
+
+const PASTE_ATTACHMENT_THRESHOLD = 500 // chars — pastes longer than this become an attachment
 
 const ALLOWED_IMAGE = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const ALLOWED_TEXT = [
@@ -22,6 +27,57 @@ const ALLOWED_TEXT = [
 const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt', '.log', '.json', '.csv']
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_ATTACHMENTS = 5
+
+/** Collapsible block for pasted-text attachments in chat bubbles */
+function PastedTextBlock({ attachment, folderPath }: { attachment: Attachment; folderPath: string }) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const [content, setContent] = useState<string | null>(null)
+
+  const loadContent = async () => {
+    if (content !== null) { setExpanded(e => !e); return }
+    try {
+      const abs = await window.api.getAbsolutePath({ folderPath, relativePath: attachment.path })
+      const res = await fetch(`local-file://${encodeURI(abs)}`)
+      const text = await res.text()
+      setContent(text)
+      setExpanded(true)
+    } catch {
+      setContent(t('chat.pastedTextError'))
+      setExpanded(true)
+    }
+  }
+
+  return (
+    <div className="pasted-text-block">
+      <div className="pasted-text-block-header" onClick={loadContent}>
+        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <Code size={14} />
+        <span>{t('chat.pastedText')}</span>
+        <span className="pasted-text-block-size">{attachment.size.toLocaleString()} {t('chat.chars')}</span>
+      </div>
+      {expanded && content !== null && (
+        <pre className="pasted-text-block-body">{content}</pre>
+      )}
+    </div>
+  )
+}
+
+/** Collapsible wrapper for existing long inline messages */
+function CollapsibleLongText({ text }: { text: string }) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const preview = text.slice(0, 300)
+
+  return (
+    <div className="collapsible-long-text">
+      <span>{expanded ? text : preview + '…'}</span>
+      <button className="collapsible-toggle" onClick={() => setExpanded(e => !e)}>
+        {expanded ? t('chat.showLess') : t('chat.showMore')}
+      </button>
+    </div>
+  )
+}
 
 interface ChatPanelProps {
   activeFolder: string | null
@@ -43,6 +99,10 @@ interface ChatPanelProps {
   loadingMore: boolean
   onLoadMore: () => Promise<void>
   hasPendingAgents: boolean
+  leftSidebarOpen: boolean
+  rightSidebarOpen: boolean
+  onToggleLeftSidebar: () => void
+  onToggleRightSidebar: () => void
   onStopAll: () => void
 }
 
@@ -66,8 +126,13 @@ export function ChatPanel({
   loadingMore,
   onLoadMore,
   hasPendingAgents,
+  leftSidebarOpen,
+  rightSidebarOpen,
+  onToggleLeftSidebar,
+  onToggleRightSidebar,
   onStopAll,
 }: ChatPanelProps) {
+  const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -88,18 +153,15 @@ export function ChatPanel({
     if (!el) return
     el.style.height = 'auto'
     const newHeight = Math.min(el.scrollHeight, 120)
-    el.style.height = newHeight + 'px' // max ~5줄
-    // 내용이 max-height 이내면 스크롤 불필요
+    el.style.height = newHeight + 'px'
     el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden'
   }, [])
 
   // ── File handling helpers ──
 
   const isFileAllowed = (file: File): boolean => {
-    // Check by mime type
     if (ALLOWED_IMAGE.includes(file.type)) return true
     if (ALLOWED_TEXT.some(t => file.type.startsWith(t))) return true
-    // Fallback: check by extension
     const ext = '.' + file.name.split('.').pop()?.toLowerCase()
     return ALLOWED_EXTENSIONS.includes(ext)
   }
@@ -146,6 +208,24 @@ export function ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Pasted-text attachment helper ──
+  const addPastedText = useCallback((text: string) => {
+    setPendingAttachments(prev => {
+      if (prev.length >= MAX_ATTACHMENTS) return prev
+      const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const filename = `pasted-text-${Date.now()}.txt`
+      const file = new File([text], filename, { type: 'text/plain' })
+      return [...prev, {
+        id,
+        file,
+        previewUrl: '',
+        type: 'text' as const,
+        textContent: text,
+        isPastedText: true,
+      }]
+    })
+  }, [])
+
   // ── Paste handler ──
   const onPaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items)
@@ -159,8 +239,16 @@ export function ChatPanel({
     if (files.length > 0) {
       e.preventDefault()
       addFiles(files)
+      return
     }
-  }, [addFiles])
+
+    // Long text paste → convert to attachment
+    const text = e.clipboardData.getData('text/plain')
+    if (text.length >= PASTE_ATTACHMENT_THRESHOLD) {
+      e.preventDefault()
+      addPastedText(text)
+    }
+  }, [addFiles, addPastedText])
 
   // ── Drag & Drop handlers ──
   const onDragEnter = useCallback((e: React.DragEvent) => {
@@ -215,7 +303,11 @@ export function ChatPanel({
           data: base64,
           mimeType: pa.file.type || 'application/octet-stream',
         })
-        if ('attachment' in result) saved.push(result.attachment as Attachment)
+        if ('attachment' in result) {
+          const att = result.attachment as Attachment
+          if (pa.isPastedText) (att as any).isPastedText = true
+          saved.push(att)
+        }
       } catch (err) {
         console.error('Failed to save attachment:', err)
       }
@@ -229,21 +321,18 @@ export function ChatPanel({
     return saved
   }
 
-  // Track scroll position — if user scrolled up, disable auto-scroll
-  // Also detect scroll-to-top for loading older messages
+  // Track scroll position
   const handleMessagesScroll = () => {
     const el = messagesContainerRef.current
     if (!el) return
-    const threshold = 80 // px from bottom
+    const threshold = 80
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
     isNearBottomRef.current = atBottom
     setShowScrollDown(!atBottom)
 
-    // Load more when scrolled near top
     if (el.scrollTop < 60 && hasMoreMessages && !loadingMore) {
       const prevScrollHeight = el.scrollHeight
       onLoadMore().then(() => {
-        // Preserve scroll position after prepending older messages
         requestAnimationFrame(() => {
           const newScrollHeight = el.scrollHeight
           el.scrollTop = newScrollHeight - prevScrollHeight
@@ -252,21 +341,17 @@ export function ChatPanel({
     }
   }
 
-  // Reset scroll state when switching folders — force scroll to bottom
   useEffect(() => {
     isNearBottomRef.current = true
     initialScrollDoneRef.current = null
     setShowScrollDown(false)
   }, [activeFolder])
 
-  // Auto-scroll to bottom only when user is near bottom
   useEffect(() => {
     if (!activeFolder || folderMessages.length === 0) return
 
-    // On initial load (folder switch), force instant scroll to bottom
     if (initialScrollDoneRef.current !== activeFolder) {
       initialScrollDoneRef.current = activeFolder
-      // Use requestAnimationFrame to wait for DOM to render
       requestAnimationFrame(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
         isNearBottomRef.current = true
@@ -279,7 +364,6 @@ export function ChatPanel({
     }
   }, [folderMessages, activeFolder])
 
-  // Scroll-to-bottom handler
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     isNearBottomRef.current = true
@@ -312,10 +396,13 @@ export function ChatPanel({
     const attachments = await savePendingAttachments()
     send(attachments.length > 0 ? attachments : undefined)
     setTimeout(() => adjustTextareaHeight(), 0)
+    // 전송 후 스크롤이 하단이 아니면 하단으로 이동
+    if (!isNearBottomRef.current) {
+      setTimeout(() => scrollToBottom(), 50)
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Mention popup keyboard navigation
     if (mentionOpen && filteredMentions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -341,8 +428,6 @@ export function ChatPanel({
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Ignore Enter while the IME is still composing (Korean/Japanese/Chinese).
-      // Without this, the last jamo gets committed as its own separate message.
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       e.preventDefault()
       handleSend()
@@ -359,6 +444,11 @@ export function ChatPanel({
     textareaRef.current?.focus()
   }
 
+  const formatPermissions = (perms: string[]) =>
+    perms.map((p) =>
+      p === 'fileWrite' ? t('chat.permFileWrite') : p === 'bash' ? t('chat.permShell') : t('chat.permNetwork')
+    ).join(', ')
+
   return (
     <main
       className="chat"
@@ -368,18 +458,34 @@ export function ChatPanel({
       onDrop={onDrop}
     >
       <header className="chat-header drag">
-        <div>
+        {!leftSidebarOpen && (
+          <button
+            className="sidebar-toggle-btn chat-toggle-btn"
+            onClick={onToggleLeftSidebar}
+            title={t('sidebar.expandSidebar')}
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        )}
+        <div style={{ flex: 1 }}>
           <div className="room-title">
-            {activeFolder ? basename(activeFolder) : 'No folder'}
+            {activeFolder ? basename(activeFolder) : t('chat.noFolder')}
           </div>
           <div className="room-meta">
             {activeFolder
-              ? `${octos.length} agent${octos.length !== 1 ? 's' : ''}`
+              ? t('chat.agentCount', { count: octos.length })
               : activeWorkspace
-              ? 'Open a folder to start'
-              : 'Create a workspace to start'}
+              ? t('chat.openFolderToStart')
+              : t('chat.createWorkspaceToStart')}
           </div>
         </div>
+        <button
+          className={`sidebar-toggle-btn chat-toggle-btn${rightSidebarOpen ? ' panel-active' : ''}`}
+          onClick={onToggleRightSidebar}
+          title={rightSidebarOpen ? t('sidebar.collapseAgents') : t('sidebar.expandAgents')}
+        >
+          {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+        </button>
       </header>
 
       {/* Drag & Drop overlay */}
@@ -387,29 +493,28 @@ export function ChatPanel({
         <div className="drop-overlay">
           <div className="drop-overlay-content">
             <div className="drop-overlay-icon"><Download size={40} /></div>
-            <div className="drop-overlay-text">파일을 여기에 놓으세요</div>
+            <div className="drop-overlay-text">{t('chat.dropFiles')}</div>
           </div>
         </div>
       )}
 
       <div className="messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
-        {/* Loading indicator for older messages */}
         {loadingMore && (
           <div className="load-more-indicator">
             <span className="load-more-dot" />
-            Loading older messages…
+            {t('chat.loadingOlder')}
           </div>
         )}
         {hasMoreMessages && !loadingMore && folderMessages.length > 0 && (
-          <div className="load-more-hint">↑ Scroll up for older messages</div>
+          <div className="load-more-hint">{t('chat.scrollUpOlder')}</div>
         )}
         {folderMessages.length === 0 && !loadingMore && (
           <div className="empty">
-            <div className="empty-title">Octopal</div>
+            <div className="empty-title">{t('chat.emptyTitle')}</div>
             <div className="empty-sub">
               {activeFolder
-                ? 'Use @name to talk to an agent. @all to talk to everyone.'
-                : 'Open a folder to get started.'}
+                ? t('chat.emptyWithFolder')
+                : t('chat.emptyNoFolder')}
             </div>
           </div>
         )}
@@ -420,7 +525,7 @@ export function ChatPanel({
             return (
               <div key={m.id} className="dispatcher-indicator">
                 <span className="dispatcher-dot" />
-                Routing message to the right agent…
+                {t('chat.routing')}
               </div>
             )
           }
@@ -439,68 +544,67 @@ export function ChatPanel({
                   </div>
                 ) : (
                   <div className="bubble-text">
-                    {isUser ? m.text : <MarkdownRenderer content={m.text} />}
+                    {isUser ? (
+                      m.text.length > PASTE_ATTACHMENT_THRESHOLD ? (
+                        <CollapsibleLongText text={m.text} />
+                      ) : m.text
+                    ) : <MarkdownRenderer content={m.text} />}
                   </div>
                 )}
-                {/* Pending handoff approval — shown only on the speaker's bubble */}
                 {m.handoff && m.handoff.approved === undefined && (
                   <div className="handoff-prompt">
                     <div className="handoff-text">
-                      Call {m.handoff.targets.map((t) => `@${t}`).join(', ')}?
+                      {t('chat.callTargets', { targets: m.handoff.targets.map((tgt) => `@${tgt}`).join(', ') })}
                     </div>
                     <div className="handoff-actions">
                       <button
                         className="btn-primary"
                         onClick={() => onApproveHandoff(m.id)}
                       >
-                        Approve
+                        {t('common.approve')}
                       </button>
                       <button
                         className="btn-secondary"
                         onClick={() => onDismissHandoff(m.id)}
                       >
-                        Dismiss
+                        {t('common.dismiss')}
                       </button>
                     </div>
                   </div>
                 )}
                 {m.handoff && m.handoff.approved === false && (
-                  <div className="handoff-resolved">Handoff dismissed</div>
+                  <div className="handoff-resolved">{t('chat.handoffDismissed')}</div>
                 )}
                 {m.handoff && m.handoff.approved === true && (
-                  <div className="handoff-resolved">Handoff approved</div>
+                  <div className="handoff-resolved">{t('chat.handoffApproved')}</div>
                 )}
-                {/* Permission request approval */}
                 {m.permissionRequest && m.permissionRequest.granted === undefined && (
                   <div className="permission-prompt">
                     <div className="permission-text">
-                      🔐 Grant {m.permissionRequest.permissions.map((p) =>
-                        p === 'fileWrite' ? 'file write' : p === 'bash' ? 'shell' : 'network'
-                      ).join(', ')} permission?
+                      {t('chat.grantPermission', { permissions: formatPermissions(m.permissionRequest.permissions) })}
                     </div>
                     <div className="permission-actions">
                       <button
                         className="btn-grant"
                         onClick={() => onGrantPermission(m.id)}
                       >
-                        Grant
+                        {t('common.grant')}
                       </button>
                       <button
                         className="btn-secondary"
                         onClick={() => onDismissPermission(m.id)}
                       >
-                        Dismiss
+                        {t('common.dismiss')}
                       </button>
                     </div>
                   </div>
                 )}
                 {m.permissionRequest && m.permissionRequest.granted === true && (
-                  <div className="permission-resolved granted">✅ Permission granted</div>
+                  <div className="permission-resolved granted">{t('chat.permissionGranted')}</div>
                 )}
                 {m.permissionRequest && m.permissionRequest.granted === false && (
-                  <div className="permission-resolved dismissed">Permission dismissed</div>
+                  <div className="permission-resolved dismissed">{t('chat.permissionDismissed')}</div>
                 )}
-                {/* Inline attachments */}
                 {m.attachments && m.attachments.length > 0 && (
                   <div className="message-images">
                     {m.attachments.map((att) =>
@@ -528,6 +632,8 @@ export function ChatPanel({
                             }}
                           />
                         )
+                      ) : (att as any).isPastedText ? (
+                        <PastedTextBlock key={att.id} attachment={att} folderPath={activeFolder!} />
                       ) : (
                         <div key={att.id} className="message-file-badge">
                           <span className="message-file-icon"><FileText size={16} /></span>
@@ -546,7 +652,7 @@ export function ChatPanel({
 
       {/* Scroll-to-bottom FAB */}
       {showScrollDown && (
-        <button className="scroll-to-bottom" onClick={scrollToBottom} title="맨 아래로">
+        <button className="scroll-to-bottom" onClick={scrollToBottom} title={t('chat.scrollToBottom')}>
           <ArrowDown size={18} />
         </button>
       )}
@@ -560,29 +666,48 @@ export function ChatPanel({
         {pendingAttachments.length > 0 && (
           <div className="attachment-preview">
             {pendingAttachments.map((att) => (
-              <div key={att.id} className={`attachment-thumb ${att.type === 'text' ? 'file-type' : ''}`}>
-                {att.type === 'image' ? (
-                  <img src={att.previewUrl} alt={att.file.name} />
-                ) : (
-                  <>
-                    <span className="attachment-file-icon"><FileText size={20} /></span>
-                    <span className="attachment-file-name">{att.file.name}</span>
-                  </>
-                )}
-                <button
-                  className="attachment-remove"
-                  onClick={() => removeAttachment(att.id)}
-                  aria-label="Remove attachment"
-                >
-                  <X size={12} />
-                </button>
-              </div>
+              att.isPastedText && att.textContent ? (
+                <div key={att.id} className="attachment-thumb pasted-text">
+                  <div className="paste-header">
+                    <Code size={14} />
+                    <span>{t('chat.pastedText')}</span>
+                  </div>
+                  <div className="paste-preview">{att.textContent.slice(0, 200)}</div>
+                  <div className="paste-meta">
+                    {att.textContent.length.toLocaleString()} {t('chat.chars')}
+                  </div>
+                  <button
+                    className="attachment-remove"
+                    onClick={() => removeAttachment(att.id)}
+                    aria-label={t('chat.removeAttachment')}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div key={att.id} className={`attachment-thumb ${att.type === 'text' ? 'file-type' : ''}`}>
+                  {att.type === 'image' ? (
+                    <img src={att.previewUrl} alt={att.file.name} />
+                  ) : (
+                    <>
+                      <span className="attachment-file-icon"><FileText size={20} /></span>
+                      <span className="attachment-file-name">{att.file.name}</span>
+                    </>
+                  )}
+                  <button
+                    className="attachment-remove"
+                    onClick={() => removeAttachment(att.id)}
+                    aria-label={t('chat.removeAttachment')}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )
             ))}
           </div>
         )}
 
         <div className="composer-row">
-          {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -595,7 +720,7 @@ export function ChatPanel({
             className="attach-btn"
             onClick={() => fileInputRef.current?.click()}
             disabled={!activeFolder}
-            title="파일 첨부"
+            title={t('chat.attachFile')}
           >
             <Paperclip size={18} />
           </button>
@@ -604,8 +729,8 @@ export function ChatPanel({
             className="composer-textarea"
             placeholder={
               activeFolder
-                ? 'Message the room… (@name to target one agent, @all for everyone)'
-                : 'Open a folder to start chatting'
+                ? t('chat.placeholder')
+                : t('chat.placeholderDisabled')
             }
             value={input}
             onChange={onInputChange}
@@ -615,7 +740,7 @@ export function ChatPanel({
             rows={1}
           />
           {hasPendingAgents && !input.trim() ? (
-            <button className="send stop-btn" onClick={onStopAll} title="Stop all agents">
+            <button className="send stop-btn" onClick={onStopAll} title={t('chat.stopAllAgents')}>
               <Square size={14} fill="currentColor" />
             </button>
           ) : (

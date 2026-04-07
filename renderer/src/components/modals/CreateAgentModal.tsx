@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EmojiPicker } from '../EmojiPicker'
 import { AlertTriangle } from 'lucide-react'
 
@@ -9,6 +10,7 @@ interface CreateAgentModalProps {
 }
 
 export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgentModalProps) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
   const [icon, setIcon] = useState('')
@@ -62,14 +64,14 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0' }}>
             <AlertTriangle size={36} style={{ color: 'var(--warning, #f0a030)' }} />
-            <div className="modal-title" style={{ marginBottom: 0 }}>에이전트 제한</div>
-            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-              폴더당 최대 <strong>{limitReached}명</strong>의 에이전트만 생성할 수 있습니다.<br />
-              기존 에이전트를 삭제한 후 다시 시도해주세요.
-            </p>
+            <div className="modal-title" style={{ marginBottom: 0 }}>{t('agents.limit')}</div>
+            <p
+              style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: 0, fontSize: 13, lineHeight: 1.5 }}
+              dangerouslySetInnerHTML={{ __html: t('agents.limitMsg', { max: limitReached }) }}
+            />
           </div>
           <div className="modal-actions">
-            <button className="btn-primary" onClick={onClose}>확인</button>
+            <button className="btn-primary" onClick={onClose}>{t('common.ok')}</button>
           </div>
         </div>
       </div>
@@ -79,7 +81,7 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">New agent</div>
+        <div className="modal-title">{t('modals.createAgent.title')}</div>
 
         <EmojiPicker
           value={icon}
@@ -89,26 +91,26 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
           onColorChange={setColor}
         />
 
-        <label className="modal-label">Name</label>
+        <label className="modal-label">{t('label.name')}</label>
         <input
           className="modal-input"
-          placeholder="reviewer"
+          placeholder={t('modals.createAgent.namePlaceholder')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
         />
 
-        <label className="modal-label">Role</label>
+        <label className="modal-label">{t('label.role')}</label>
         <textarea
           className="modal-textarea"
-          placeholder="Code reviewer, security focused"
+          placeholder={t('modals.createAgent.rolePlaceholder')}
           value={role}
           onChange={(e) => setRole(e.target.value)}
         />
 
-        <label className="modal-label">Permissions</label>
+        <label className="modal-label">{t('modals.createAgent.permissions')}</label>
         <div className="modal-hint" style={{ marginTop: 0 }}>
-          Without any of these, the agent can only reply with text. Turn one on to let it act.
+          {t('modals.createAgent.permissionsHint')}
         </div>
         <div className="perm-row">
           <label className="perm-toggle">
@@ -117,7 +119,7 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
               checked={fileWrite}
               onChange={(e) => setFileWrite(e.target.checked)}
             />
-            <span>Write / edit files</span>
+            <span>{t('modals.createAgent.permFileWrite')}</span>
           </label>
           <label className="perm-toggle">
             <input
@@ -125,7 +127,7 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
               checked={bash}
               onChange={(e) => setBash(e.target.checked)}
             />
-            <span>Run shell commands</span>
+            <span>{t('modals.createAgent.permShell')}</span>
           </label>
           <label className="perm-toggle">
             <input
@@ -133,22 +135,22 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
               checked={network}
               onChange={(e) => setNetwork(e.target.checked)}
             />
-            <span>Access the network</span>
+            <span>{t('modals.createAgent.permNetwork')}</span>
           </label>
         </div>
 
-        <label className="modal-label">Allow paths (comma-separated globs)</label>
+        <label className="modal-label">{t('modals.createAgent.allowPaths')}</label>
         <input
           className="modal-input"
-          placeholder="src/**, tests/**"
+          placeholder={t('modals.createAgent.allowPathsPlaceholder')}
           value={allowPaths}
           onChange={(e) => setAllowPaths(e.target.value)}
         />
 
-        <label className="modal-label">Deny paths</label>
+        <label className="modal-label">{t('modals.createAgent.denyPaths')}</label>
         <input
           className="modal-input"
-          placeholder=".env, secrets/**"
+          placeholder={t('modals.createAgent.denyPathsPlaceholder')}
           value={denyPaths}
           onChange={(e) => setDenyPaths(e.target.value)}
         />
@@ -157,10 +159,10 @@ export function CreateAgentModal({ folderPath, onClose, onCreated }: CreateAgent
 
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button className="btn-primary" onClick={create}>
-            Create
+            {t('common.create')}
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, nativeImage, globalShortcut, Menu, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
@@ -19,11 +19,33 @@ const STATE_DIR = IS_DEV
   : path.join(os.homedir(), '.octopal')
 const STATE_FILE = path.join(STATE_DIR, 'state.json')
 if (IS_DEV) {
-  app.setPath('userData', path.join(os.homedir(), 'Library', 'Application Support', 'Octopal Dev'))
+  // Cross-platform userData path for dev mode
+  if (process.platform === 'darwin') {
+    app.setPath('userData', path.join(os.homedir(), 'Library', 'Application Support', 'Octopal Dev'))
+  } else if (process.platform === 'win32') {
+    app.setPath('userData', path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Octopal Dev'))
+  } else {
+    app.setPath('userData', path.join(os.homedir(), '.config', 'octopal-dev'))
+  }
 }
 
 // Folder watchers — notify renderer when .octo files change
 const watchers = new Map<string, { watcher: fs.FSWatcher; debounce: ReturnType<typeof setTimeout> | null }>()
+
+// ── Multi-window management ─────────────────────
+const MAX_WINDOWS = 5
+const windows = new Set<BrowserWindow>()
+
+/** Broadcast an IPC event to ALL open windows */
+function broadcastToWindows(channel: string, ...args: any[]) {
+  for (const win of windows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, ...args)
+    }
+  }
+}
+
+// Keep backward-compat — some code may still reference mainWindow
 let mainWindow: BrowserWindow | null = null
 
 function watchFolder(folderPath: string) {
@@ -36,9 +58,7 @@ function watchFolder(folderPath: string) {
       if (!entry) return
       if (entry.debounce) clearTimeout(entry.debounce)
       entry.debounce = setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('folder:octosChanged', folderPath)
-        }
+        broadcastToWindows('folder:octosChanged', folderPath)
       }, 150)
     })
     watchers.set(folderPath, { watcher, debounce: null })
@@ -53,17 +73,28 @@ function unwatchAll() {
   watchers.clear()
 }
 
-function createWindow() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'icon-512.png')
+function createWindow(): BrowserWindow | null {
+  if (windows.size >= MAX_WINDOWS) {
+    // Notify the most recently focused window about the limit
+    const last = BrowserWindow.getFocusedWindow() || [...windows][0]
+    if (last && !last.isDestroyed()) {
+      last.webContents.send('window:limitReached', MAX_WINDOWS)
+    }
+    return null
+  }
+
+  const iconPath = process.platform === 'win32'
+    ? path.join(__dirname, '..', 'assets', 'icon.ico')
+    : path.join(__dirname, '..', 'assets', 'icon-512.png')
   const win = new BrowserWindow({
     title: 'Octopal',
     width: 1200,
     height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    minWidth: 300,
+    minHeight: 400,
     icon: iconPath,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 14, y: 16 },
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 16 } } : {}),
     backgroundColor: '#0e0e10',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -72,8 +103,28 @@ function createWindow() {
       backgroundThrottling: false,
     },
   })
+
+  windows.add(win)
   mainWindow = win
-  win.on('closed', () => { mainWindow = null })
+
+  win.on('closed', () => {
+    windows.delete(win)
+    if (mainWindow === win) {
+      mainWindow = [...windows][0] || null
+    }
+  })
+
+  win.on('focus', () => {
+    mainWindow = win
+  })
+
+  // Open external links in the default browser instead of a new Electron window
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
 
   if (IS_DEV) {
     win.loadURL('http://localhost:5173')
@@ -81,6 +132,8 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'renderer', 'index.html'))
   }
+
+  return win
 }
 
 // Register custom protocol for loading local files (uploads) in the renderer
@@ -90,6 +143,22 @@ protocol.registerSchemesAsPrivileged([
 
 // Set the app name for macOS menu bar & about panel
 app.setName('Octopal')
+
+// ── Single instance lock ─────────────────────────
+// Prevent multiple app processes — only allow multiple windows within one process
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    // Someone tried to run a second instance → focus our existing window
+    const win = BrowserWindow.getFocusedWindow() || [...windows][0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  })
+}
 
 app.whenReady().then(() => {
   // Handle local-file:// protocol — maps absolute paths to file responses
@@ -108,6 +177,90 @@ app.whenReady().then(() => {
     }
   }
 
+  // ── Application menu with New Window ──────────
+  const isMac = process.platform === 'darwin'
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [{
+          label: app.name,
+          submenu: [
+            { role: 'about' as const },
+            { type: 'separator' as const },
+            { role: 'services' as const },
+            { type: 'separator' as const },
+            { role: 'hide' as const },
+            { role: 'hideOthers' as const },
+            { role: 'unhide' as const },
+            { type: 'separator' as const },
+            { role: 'quit' as const },
+          ],
+        }]
+      : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          click: () => createWindow(),
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const },
+            ]
+          : [{ role: 'close' as const }]),
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
+
+  // ── Dock menu (macOS right-click) ──────────────────
+  if (process.platform === 'darwin' && app.dock) {
+    const dockMenu = Menu.buildFromTemplate([
+      {
+        label: 'New Window',
+        click: () => createWindow(),
+      },
+    ])
+    app.dock.setMenu(dockMenu)
+  }
+
   createWindow()
 
   app.on('activate', () => {
@@ -118,6 +271,20 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   unwatchAll()
   if (process.platform !== 'darwin') app.quit()
+})
+
+// ── Platform info ───────────────────────────────
+ipcMain.handle('app:getPlatform', () => process.platform)
+
+// ── Multi-window IPC ─────────────────────────────
+ipcMain.handle('window:new', () => {
+  const win = createWindow()
+  if (!win) return { ok: false, error: `Maximum ${MAX_WINDOWS} windows allowed` }
+  return { ok: true, windowId: win.id }
+})
+
+ipcMain.handle('window:count', () => {
+  return { count: windows.size, max: MAX_WINDOWS }
 })
 
 // ── State persistence ─────────────────────────
@@ -842,13 +1009,12 @@ ipcMain.handle('octo:sendMessage', async (_event, params: {
   collaborators?: Array<{ name: string; role: string }>
   isLeader?: boolean
   imagePaths?: string[]
+  textPaths?: string[]
 }) => {
-  const { folderPath, octoPath, prompt, userTs, runId, peers, collaborators, isLeader, imagePaths } = params
+  const { folderPath, octoPath, prompt, userTs, runId, peers, collaborators, isLeader, imagePaths, textPaths } = params
 
   const sendActivity = (text: string) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('octo:activity', { runId, text })
-    }
+    broadcastToWindows('octo:activity', { runId, text })
   }
 
   const sendLogEntry = (entry: {
@@ -857,9 +1023,7 @@ ipcMain.handle('octo:sendMessage', async (_event, params: {
     target: string
     ts: number
   }) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('activity:log', { folderPath, ...entry })
-    }
+    broadcastToWindows('activity:log', { folderPath, ...entry })
   }
 
   try {
@@ -1031,17 +1195,25 @@ How to collaborate (very important):
     // Claude Code auto-resolves `@relative/path` mentions by reading the file with
     // its Read tool (images included, for vision models).
     let finalPrompt = prompt
+    const refs: string[] = []
     if (imagePaths && imagePaths.length > 0) {
-      const refs: string[] = []
       for (const imgRelPath of imagePaths) {
         const absImgPath = path.join(folderPath, imgRelPath)
         if (fs.existsSync(absImgPath)) {
           refs.push(`@${imgRelPath}`)
         }
       }
-      if (refs.length > 0) {
-        finalPrompt = `Attached files: ${refs.join(' ')}\n\n${prompt}`
+    }
+    if (textPaths && textPaths.length > 0) {
+      for (const txtRelPath of textPaths) {
+        const absTxtPath = path.join(folderPath, txtRelPath)
+        if (fs.existsSync(absTxtPath)) {
+          refs.push(`@${txtRelPath}`)
+        }
       }
+    }
+    if (refs.length > 0) {
+      finalPrompt = `Attached files: ${refs.join(' ')}\n\n${prompt}`
     }
 
     claudeArgs.push(finalPrompt)
@@ -1222,4 +1394,84 @@ ipcMain.handle('file:getAbsolutePath', (_event, params: {
   relativePath: string
 }) => {
   return path.join(params.folderPath, params.relativePath)
+})
+
+// ── Settings persistence ─────────────────────
+interface AppSettings {
+  general: {
+    restoreLastWorkspace: boolean
+    launchAtLogin: boolean
+    language: string
+  }
+  agents: {
+    defaultPermissions: {
+      fileWrite: boolean
+      bash: boolean
+      network: boolean
+    }
+  }
+  appearance: {
+    chatFontSize: number // 13-18
+  }
+}
+
+const SETTINGS_FILE = path.join(STATE_DIR, 'settings.json')
+
+const DEFAULT_SETTINGS: AppSettings = {
+  general: {
+    restoreLastWorkspace: true,
+    launchAtLogin: false,
+    language: 'en',
+  },
+  agents: {
+    defaultPermissions: {
+      fileWrite: false,
+      bash: false,
+      network: false,
+    },
+  },
+  appearance: {
+    chatFontSize: 14,
+  },
+}
+
+function loadSettings(): AppSettings {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'))
+      return {
+        general: { ...DEFAULT_SETTINGS.general, ...raw.general },
+        agents: {
+          defaultPermissions: {
+            ...DEFAULT_SETTINGS.agents.defaultPermissions,
+            ...raw.agents?.defaultPermissions,
+          },
+        },
+        appearance: { ...DEFAULT_SETTINGS.appearance, ...raw.appearance },
+      }
+    }
+  } catch {}
+  return { ...DEFAULT_SETTINGS }
+}
+
+function saveSettings(settings: AppSettings) {
+  fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true })
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2))
+}
+
+ipcMain.handle('settings:load', () => loadSettings())
+
+ipcMain.handle('settings:save', (_event, settings: AppSettings) => {
+  saveSettings(settings)
+
+  // Apply launch-at-login setting
+  if (app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: settings.general.launchAtLogin })
+  }
+
+  return { ok: true }
+})
+
+ipcMain.handle('settings:getVersion', () => {
+  return { version: app.getVersion(), electron: process.versions.electron, node: process.versions.node }
 })

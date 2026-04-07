@@ -34,6 +34,24 @@ interface HistoryMessage {
   ts: number
 }
 
+interface AppSettings {
+  general: {
+    restoreLastWorkspace: boolean
+    launchAtLogin: boolean
+    language: string
+  }
+  agents: {
+    defaultPermissions: {
+      fileWrite: boolean
+      bash: boolean
+      network: boolean
+    }
+  }
+  appearance: {
+    chatFontSize: number
+  }
+}
+
 interface Window {
   api: {
     loadState: () => Promise<AppState>
@@ -73,6 +91,7 @@ interface Window {
       collaborators?: Array<{ name: string; role: string }>
       isLeader?: boolean
       imagePaths?: string[]
+      textPaths?: string[]
     }) => Promise<{ ok: true; output: string } | { ok: false; error: string }>
     onActivity: (cb: (data: { runId: string; text: string }) => void) => () => void
     onActivityLog: (
@@ -131,6 +150,17 @@ interface Window {
       { ok: true } | { ok: false; error: string }
     >
     stopAllAgents: () => Promise<{ ok: true; stopped: number }>
+    getPlatform: () => Promise<string>
+
+    // Settings
+    loadSettings: () => Promise<AppSettings>
+    saveSettings: (settings: AppSettings) => Promise<{ ok: true }>
+    getVersion: () => Promise<{ version: string; electron: string; node: string }>
+
+    // Multi-window
+    newWindow: () => Promise<{ ok: true; windowId: number } | { ok: false; error: string }>
+    getWindowCount: () => Promise<{ count: number; max: number }>
+    onWindowLimitReached: (cb: (maxWindows: number) => void) => () => void
   }
 }
 

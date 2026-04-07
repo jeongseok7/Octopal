@@ -6,6 +6,7 @@ export interface Attachment {
   mimeType: string
   size: number
   previewUrl?: string    // 전송 전 미리보기용 object URL
+  isPastedText?: boolean // true if created from a long-paste action
 }
 
 export interface PendingHandoff {

@@ -1,13 +1,14 @@
 import { useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { basename } from '../utils'
-import { Plus, FolderOpen, ChevronDown, X, BookOpen, Activity, Settings } from 'lucide-react'
+import { Plus, FolderOpen, ChevronDown, X, BookOpen, Activity, Settings, PanelLeftClose } from 'lucide-react'
 
 interface LeftSidebarProps {
   activeWorkspace: Workspace | null
   state: AppState
   activeFolder: string | null
-  centerTab: 'chat' | 'wiki' | 'activity'
-  setCenterTab: (tab: 'chat' | 'wiki' | 'activity') => void
+  centerTab: 'chat' | 'wiki' | 'activity' | 'settings'
+  setCenterTab: (tab: 'chat' | 'wiki' | 'activity' | 'settings') => void
   activityCount: number
   workspaceMenuOpen: boolean
   setWorkspaceMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void
@@ -17,6 +18,7 @@ interface LeftSidebarProps {
   removeFolder: (p: string) => void
   pickFolder: () => void
   setShowCreateWorkspace: (v: boolean) => void
+  onCollapse: () => void
 }
 
 export function LeftSidebar({
@@ -34,7 +36,9 @@ export function LeftSidebar({
   removeFolder,
   pickFolder,
   setShowCreateWorkspace,
+  onCollapse,
 }: LeftSidebarProps) {
+  const { t } = useTranslation()
   const folders = activeWorkspace?.folders || []
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -53,7 +57,16 @@ export function LeftSidebar({
 
   return (
     <aside className="left-sidebar">
-      <div className="sidebar-header drag" />
+      <div className="sidebar-header drag">
+        <div style={{ flex: 1 }} />
+        <button
+          className="sidebar-toggle-btn"
+          onClick={onCollapse}
+          title={t('sidebar.collapseSidebar')}
+        >
+          <PanelLeftClose size={16} />
+        </button>
+      </div>
       <div className="workspace-section" ref={menuRef}>
         <button
           className="workspace-switcher"
@@ -78,7 +91,7 @@ export function LeftSidebar({
                       e.stopPropagation()
                       removeWorkspace(w.id)
                     }}
-                    title="Remove workspace"
+                    title={t('sidebar.removeWorkspace')}
                   >
                     <X size={14} />
                   </button>
@@ -93,7 +106,7 @@ export function LeftSidebar({
                 setShowCreateWorkspace(true)
               }}
             >
-              + New workspace
+              {t('sidebar.newWorkspace')}
             </button>
           </div>
         )}
@@ -103,7 +116,6 @@ export function LeftSidebar({
           className={`sidebar-nav-item ${centerTab === 'wiki' ? 'active' : ''}`}
           onClick={() => {
             if (centerTab === 'wiki') {
-              // 채팅으로 돌아갈 때 폴더가 없으면 첫 번째 폴더 선택
               if (!activeFolder && folders.length > 0) {
                 setActiveFolder(folders[0])
               }
@@ -116,7 +128,7 @@ export function LeftSidebar({
           disabled={!state.activeWorkspaceId}
         >
           <BookOpen size={16} />
-          <span>Wiki</span>
+          <span>{t('sidebar.wiki')}</span>
         </button>
         <button
           className={`sidebar-nav-item ${centerTab === 'activity' ? 'active' : ''}`}
@@ -133,23 +145,16 @@ export function LeftSidebar({
           disabled={!state.activeWorkspaceId}
         >
           <Activity size={16} />
-          <span>Activity</span>
+          <span>{t('sidebar.activity')}</span>
           {activityCount > 0 && (
             <span className="sidebar-nav-badge">{activityCount}</span>
           )}
-        </button>
-        <button
-          className="sidebar-nav-item"
-          disabled={!state.activeWorkspaceId}
-        >
-          <Settings size={16} />
-          <span>Settings</span>
         </button>
       </div>
       <div className="project-list">
         <button className="add-folder-btn" onClick={pickFolder} disabled={!activeWorkspace}>
           <Plus size={14} />
-          <span>Add Folder</span>
+          <span>{t('sidebar.addFolder')}</span>
         </button>
         {folders.map((f) => (
           <button
@@ -158,7 +163,7 @@ export function LeftSidebar({
             onClick={() => { setActiveFolder(f); setCenterTab('chat') }}
             onContextMenu={(e) => {
               e.preventDefault()
-              if (confirm(`Remove ${basename(f)} from the list?`)) removeFolder(f)
+              if (confirm(t('sidebar.removeFolderConfirm', { name: basename(f) }))) removeFolder(f)
             }}
             title={f}
           >
@@ -166,6 +171,24 @@ export function LeftSidebar({
             <span className="project-name">{basename(f)}</span>
           </button>
         ))}
+      </div>
+      <div className="sidebar-footer">
+        <button
+          className={`sidebar-footer-btn ${centerTab === 'settings' ? 'active' : ''}`}
+          onClick={() => {
+            if (centerTab === 'settings') {
+              if (!activeFolder && folders.length > 0) {
+                setActiveFolder(folders[0])
+              }
+              setCenterTab('chat')
+            } else {
+              setCenterTab('settings')
+            }
+          }}
+        >
+          <Settings size={16} />
+          <span>{t('sidebar.settings')}</span>
+        </button>
       </div>
     </aside>
   )

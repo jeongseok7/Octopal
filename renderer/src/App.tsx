@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import './i18n'
 import type { ActivityLogEntry, Attachment, Message, PermissionRequest } from './types'
 import { LeftSidebar } from './components/LeftSidebar'
 import { ChatPanel } from './components/ChatPanel'
@@ -10,8 +12,10 @@ import { CreateWorkspaceModal } from './components/modals/CreateWorkspaceModal'
 import { WelcomeModal } from './components/modals/WelcomeModal'
 import { OpenFolderModal } from './components/modals/OpenFolderModal'
 import { EditAgentModal } from './components/modals/EditAgentModal'
+import { SettingsPanel } from './components/SettingsPanel'
 
 export function App() {
+  const { t, i18n } = useTranslation()
   const [state, setState] = useState<AppState>({ workspaces: [], activeWorkspaceId: null })
   const [activeFolder, setActiveFolder] = useState<string | null>(null)
   const [octos, setOctos] = useState<OctoFile[]>([])
@@ -30,7 +34,10 @@ export function App() {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
-  const [centerTab, setCenterTab] = useState<'chat' | 'wiki' | 'activity'>('chat')
+  const [centerTab, setCenterTab] = useState<'chat' | 'wiki' | 'activity' | 'settings'>('chat')
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true)
+  const [platform, setPlatform] = useState<string>('darwin')
 
   // runId -> { folderPath, messageId } so activity events can find the right bubble
   const runMapRef = useRef<Map<string, { folderPath: string; messageId: string }>>(new Map())
@@ -53,8 +60,14 @@ export function App() {
 
   // ── Lifecycle ──
 
-  // Load state on mount
+  // Load state on mount + apply saved language
   useEffect(() => {
+    window.api.getPlatform().then((p) => setPlatform(p))
+    window.api.loadSettings().then((settings) => {
+      if (settings.general.language && settings.general.language !== i18n.language) {
+        i18n.changeLanguage(settings.general.language)
+      }
+    })
     window.api.loadState().then(async (s) => {
       if (s.workspaces.length === 0) {
         // 첫 실행: "Personal" 스페이스 자동 생성 후 웰컴 모달
@@ -67,6 +80,38 @@ export function App() {
         if (active && active.folders.length > 0) setActiveFolder(active.folders[0])
       }
     })
+  }, [])
+
+  // Compact mode: below this threshold sidebars open as overlays
+  const COMPACT_BREAKPOINT = 700
+  // Auto-collapse: below this threshold sidebars auto-close
+  const COLLAPSE_BREAKPOINT = 900
+  const [compactMode, setCompactMode] = useState(window.innerWidth < COMPACT_BREAKPOINT)
+
+  // Track whether sidebars were auto-collapsed by resize (not manually closed)
+  const autoCollapsedRef = useRef(false)
+
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth
+      setCompactMode(w < COMPACT_BREAKPOINT)
+      if (w < COLLAPSE_BREAKPOINT) {
+        if (!autoCollapsedRef.current) {
+          autoCollapsedRef.current = true
+          setLeftSidebarOpen(false)
+          setRightSidebarOpen(false)
+        }
+      } else {
+        if (autoCollapsedRef.current) {
+          autoCollapsedRef.current = false
+          setLeftSidebarOpen(true)
+          setRightSidebarOpen(true)
+        }
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    handleResize()
+    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   // Reset active folder when workspace changes
@@ -134,7 +179,7 @@ export function App() {
                   text: '',
                   ts,
                   pending: true,
-                  activity: 'Scanning project…',
+                  activity: t('app.scanningProject'),
                 },
               ],
             }))
@@ -275,6 +320,15 @@ export function App() {
     setLoadingMore(false)
   }
 
+  // Listen for window limit reached notification
+  useEffect(() => {
+    const unsubscribe = window.api.onWindowLimitReached((max) => {
+      // Show a brief notification — reuse the same pattern as agent limit
+      alert(t('app.windowLimit', { max }))
+    })
+    return unsubscribe
+  }, [])
+
   // Watch for .octo file changes in the active folder
   useEffect(() => {
     const unsubscribe = window.api.onOctosChanged((changedFolder) => {
@@ -353,7 +407,7 @@ export function App() {
   }
 
   const removeWorkspace = async (id: string) => {
-    if (!confirm('Remove this workspace? Folders inside remain on disk.')) return
+    if (!confirm(t('app.removeWorkspaceConfirm'))) return
     const fresh = await window.api.removeWorkspace(id)
     setState(fresh)
     setWorkspaceMenuOpen(false)
@@ -486,7 +540,7 @@ export function App() {
           {
             id: dispatcherMsgId,
             agentName: '__dispatcher__',
-            text: 'Routing…',
+            text: t('chat.routing'),
             ts: Date.now(),
             pending: true,
           },
@@ -556,8 +610,8 @@ export function App() {
           ts: Date.now(),
           pending: true,
           activity: willQueue
-            ? `Waiting — ${target.name} is still working on a previous message…`
-            : 'Thinking…',
+            ? t('app.waiting', { name: target.name })
+            : t('app.thinking'),
         },
       ],
     }))
@@ -576,7 +630,7 @@ export function App() {
         return {
           ...prev,
           [folderPathAtStart]: list.map((m) =>
-            m.id === pendingId ? { ...m, activity: 'Thinking…' } : m
+            m.id === pendingId ? { ...m, activity: t('app.thinking') } : m
           ),
         }
       })
@@ -594,6 +648,11 @@ export function App() {
       .filter((a) => a.type === 'image')
       .map((a) => a.path)
 
+    // Forward pasted-text attachments so agents can read them
+    const textPaths = attachments
+      .filter((a) => a.type === 'text')
+      .map((a) => a.path)
+
     const res = await window.api.sendMessage({
       folderPath: folderPathAtStart,
       octoPath: target.path,
@@ -604,6 +663,7 @@ export function App() {
       collaborators: collaboratorPayload,
       isLeader,
       imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+      textPaths: textPaths.length > 0 ? textPaths : undefined,
     })
 
     runMapRef.current.delete(runId)
@@ -809,7 +869,7 @@ export function App() {
         }
       }
       if (lastUserMsg) {
-        const retryPrompt = `(이전에 권한이 없어서 작업을 수행하지 못했습니다. 사용자가 권한을 승인했습니다. 이전 요청을 이어서 수행해주세요.)\n\n사용자의 원래 요청: ${lastUserMsg.text}`
+        const retryPrompt = t('app.permRetryPrompt', { request: lastUserMsg.text })
         invokeAgent(targetOcto, retryPrompt, lastUserMsg.ts, 0, new Set())
       }
     }
@@ -833,25 +893,35 @@ export function App() {
   // ── Render ──
 
   return (
-    <div className="app">
-      <LeftSidebar
-        activeWorkspace={activeWorkspace}
-        state={state}
-        activeFolder={activeFolder}
-        centerTab={centerTab}
-        setCenterTab={setCenterTab}
-        activityCount={folderActivity.length}
-        workspaceMenuOpen={workspaceMenuOpen}
-        setWorkspaceMenuOpen={setWorkspaceMenuOpen}
-        setActiveFolder={setActiveFolder}
-        switchWorkspace={switchWorkspace}
-        removeWorkspace={removeWorkspace}
-        removeFolder={removeFolder}
-        pickFolder={pickFolder}
-        setShowCreateWorkspace={setShowCreateWorkspace}
-      />
+    <div className={`app platform-${platform} ${!leftSidebarOpen ? 'left-sidebar-collapsed' : ''} ${!rightSidebarOpen ? 'right-sidebar-collapsed' : ''} ${compactMode ? 'compact-mode' : ''}`}>
+      {/* Overlay backdrop for compact mode */}
+      {compactMode && (leftSidebarOpen || rightSidebarOpen) && (
+        <div
+          className="sidebar-overlay-backdrop"
+          onClick={() => { setLeftSidebarOpen(false); setRightSidebarOpen(false) }}
+        />
+      )}
+      {leftSidebarOpen && (
+        <LeftSidebar
+          activeWorkspace={activeWorkspace}
+          state={state}
+          activeFolder={activeFolder}
+          centerTab={centerTab}
+          setCenterTab={setCenterTab}
+          activityCount={folderActivity.length}
+          workspaceMenuOpen={workspaceMenuOpen}
+          setWorkspaceMenuOpen={setWorkspaceMenuOpen}
+          setActiveFolder={setActiveFolder}
+          switchWorkspace={switchWorkspace}
+          removeWorkspace={removeWorkspace}
+          removeFolder={removeFolder}
+          pickFolder={pickFolder}
+          setShowCreateWorkspace={setShowCreateWorkspace}
+          onCollapse={() => setLeftSidebarOpen(false)}
+        />
+      )}
 
-      <div className={`center-panel ${centerTab === 'activity' ? 'center-panel--wide' : ''}`}>
+      <div className={`center-panel ${centerTab === 'activity' || centerTab === 'settings' ? 'center-panel--wide' : ''}`}>
         {centerTab === 'chat' ? (
           <ChatPanel
             activeFolder={activeFolder}
@@ -873,6 +943,10 @@ export function App() {
             loadingMore={loadingMore}
             onLoadMore={loadMoreMessages}
             hasPendingAgents={folderMessages.some((m) => m.pending)}
+            leftSidebarOpen={leftSidebarOpen}
+            rightSidebarOpen={rightSidebarOpen}
+            onToggleLeftSidebar={() => setLeftSidebarOpen((v) => !v)}
+            onToggleRightSidebar={() => setRightSidebarOpen((v) => !v)}
             onStopAll={async () => {
               await window.api.stopAllAgents()
               // Clear pending state from all messages in current folder
@@ -880,7 +954,7 @@ export function App() {
                 setMessages((prev) => ({
                   ...prev,
                   [activeFolder]: (prev[activeFolder] || []).map((m) =>
-                    m.pending ? { ...m, pending: false, text: m.text || '*(stopped)*' } : m,
+                    m.pending ? { ...m, pending: false, text: m.text || t('app.stopped') } : m,
                   ),
                 }))
               }
@@ -888,12 +962,14 @@ export function App() {
           />
         ) : centerTab === 'activity' ? (
           <ActivityPanel activityLog={folderActivity} octos={octos} />
+        ) : centerTab === 'settings' ? (
+          <SettingsPanel />
         ) : state.activeWorkspaceId ? (
           <WikiPanel workspaceId={state.activeWorkspaceId} />
         ) : null}
       </div>
 
-      {centerTab === 'chat' && (
+      {centerTab === 'chat' && rightSidebarOpen && (
         <RightSidebar
           octos={octos}
           activeFolder={activeFolder}

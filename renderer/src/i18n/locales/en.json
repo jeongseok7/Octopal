@@ -1,0 +1,206 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "create": "Create",
+    "loading": "Loading...",
+    "edit": "Edit",
+    "preview": "Preview",
+    "approve": "Approve",
+    "dismiss": "Dismiss",
+    "grant": "Grant",
+    "ok": "OK"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "general": "General",
+      "agents": "Agents",
+      "appearance": "Appearance",
+      "shortcuts": "Shortcuts",
+      "about": "About"
+    },
+    "general": {
+      "title": "General",
+      "restoreWorkspace": "Restore last workspace on startup",
+      "restoreWorkspaceDesc": "Automatically open the last active workspace when the app starts",
+      "launchAtLogin": "Launch at login",
+      "launchAtLoginDesc": "Start Octopal automatically when you log in"
+    },
+    "language": {
+      "title": "Language",
+      "desc": "Choose the display language for the app"
+    },
+    "agents": {
+      "title": "Default Agent Permissions",
+      "desc": "New agents will start with these permissions. You can override per-agent in the agent settings.",
+      "fileWrite": "File Write",
+      "fileWriteDesc": "Allow agents to create and edit files",
+      "shell": "Shell Commands",
+      "shellDesc": "Allow agents to execute bash/shell commands",
+      "network": "Network Access",
+      "networkDesc": "Allow agents to make web requests"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "theme": "Theme",
+      "themeDark": "Dark",
+      "themeComingSoon": "Light and System themes coming soon",
+      "chatFontSize": "Chat Font Size"
+    },
+    "shortcuts": {
+      "title": "Keyboard Shortcuts",
+      "comingSoon": "Shortcut customization coming in a future update.",
+      "sendMessage": "Send message",
+      "newLine": "New line",
+      "mentionAgent": "Mention agent",
+      "stopAllAgents": "Stop all agents"
+    },
+    "about": {
+      "title": "About Octopal",
+      "version": "Version",
+      "electron": "Electron",
+      "node": "Node.js",
+      "github": "GitHub",
+      "checkUpdates": "Check for Updates",
+      "copyright": "Made with ❤️ by Gilhyun"
+    },
+    "unsavedChanges": "Unsaved changes"
+  },
+  "chat": {
+    "placeholder": "Message the room… (@name to target one agent, @all for everyone)",
+    "placeholderDisabled": "Open a folder to start chatting",
+    "noFolder": "No folder",
+    "openFolderToStart": "Open a folder to start",
+    "createWorkspaceToStart": "Create a workspace to start",
+    "agentCount": "{{count}} agent",
+    "agentCount_other": "{{count}} agents",
+    "dropFiles": "Drop files here",
+    "loadingOlder": "Loading older messages…",
+    "scrollUpOlder": "↑ Scroll up for older messages",
+    "emptyTitle": "Octopal",
+    "emptyWithFolder": "Use @name to talk to an agent. @all to talk to everyone.",
+    "emptyNoFolder": "Open a folder to get started.",
+    "routing": "Routing message to the right agent…",
+    "scrollToBottom": "Scroll to bottom",
+    "attachFile": "Attach file",
+    "removeAttachment": "Remove attachment",
+    "stopAllAgents": "Stop all agents",
+    "callTargets": "Call {{targets}}?",
+    "handoffDismissed": "Handoff dismissed",
+    "handoffApproved": "Handoff approved",
+    "grantPermission": "🔐 Grant {{permissions}} permission?",
+    "permissionGranted": "✅ Permission granted",
+    "permissionDismissed": "Permission dismissed",
+    "permFileWrite": "file write",
+    "permShell": "shell",
+    "permNetwork": "network",
+    "pastedText": "Pasted text",
+    "pastedTextError": "Failed to load text",
+    "chars": "chars",
+    "showMore": "Show more",
+    "showLess": "Show less"
+  },
+  "sidebar": {
+    "wiki": "Wiki",
+    "activity": "Activity",
+    "settings": "Settings",
+    "addFolder": "Add Folder",
+    "newWorkspace": "+ New workspace",
+    "removeWorkspace": "Remove workspace",
+    "removeFolderConfirm": "Remove {{name}} from the list?",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "collapseAgents": "Hide agents panel",
+    "expandAgents": "Show agents panel"
+  },
+  "agents": {
+    "title": "Agents",
+    "addAgent": "Add agent",
+    "editAgent": "Edit agent",
+    "noAgents": "No .octo files in this folder",
+    "openFolderFirst": "Open a folder first",
+    "canUseTools": "Can use tools",
+    "clickToMention": "Click to mention, right-click to edit",
+    "limit": "Agent limit",
+    "limitMsg": "You can create up to <strong>{{max}}</strong> agents per folder.<br />Delete an existing agent and try again."
+  },
+  "modals": {
+    "welcome": {
+      "title": "Welcome to Octopal!",
+      "desc": "Start by opening a project folder\nto chat with your AI teammates.",
+      "openFolder": "Open Folder"
+    },
+    "createAgent": {
+      "title": "New agent",
+      "namePlaceholder": "reviewer",
+      "rolePlaceholder": "Code reviewer, security focused",
+      "permissions": "Permissions",
+      "permissionsHint": "Without any of these, the agent can only reply with text. Turn one on to let it act.",
+      "permFileWrite": "Write / edit files",
+      "permShell": "Run shell commands",
+      "permNetwork": "Access the network",
+      "allowPaths": "Allow paths (comma-separated globs)",
+      "allowPathsPlaceholder": "src/**, tests/**",
+      "denyPaths": "Deny paths",
+      "denyPathsPlaceholder": ".env, secrets/**"
+    },
+    "editAgent": {
+      "title": "Edit agent",
+      "deleteConfirm": "Delete {{name}}? This removes the .octo file permanently."
+    },
+    "createWorkspace": {
+      "title": "New workspace",
+      "welcomeTitle": "Welcome to Octopal",
+      "hint": "Start by creating a workspace. You can have multiple workspaces for different contexts — work, side projects, experiments.",
+      "nameLabel": "Workspace name",
+      "namePlaceholder": "Personal"
+    },
+    "openFolder": {
+      "desc": "Open a project folder to get started.",
+      "openFolder": "Open Folder"
+    }
+  },
+  "activity": {
+    "title": "Recent Activity",
+    "empty": "No activity yet",
+    "toolCreated": "Created",
+    "toolEdited": "Edited",
+    "toolRan": "Ran",
+    "toolFetched": "Fetched",
+    "justNow": "just now",
+    "secondsAgo": "{{n}}s ago",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago",
+    "daysAgo": "{{n}}d ago"
+  },
+  "wiki": {
+    "title": "Wiki",
+    "newPage": "New page",
+    "noPages": "No pages yet",
+    "emptyTitle": "Project wiki",
+    "emptyDesc": "Shared notes the whole team can read and write.\nCreate a page to get started.",
+    "newPageTitle": "New wiki page",
+    "nameLabel": "Name",
+    "namePlaceholder": "goals, decisions, design-system…",
+    "discardChanges": "Discard unsaved changes?",
+    "deleteConfirm": "Delete {{name}}?",
+    "editorPlaceholder": "Write in markdown…",
+    "emptyContent": "_(empty)_"
+  },
+  "app": {
+    "windowLimit": "You can open up to {{max}} windows.",
+    "removeWorkspaceConfirm": "Remove this workspace? Folders inside remain on disk.",
+    "scanningProject": "Scanning project…",
+    "thinking": "Thinking…",
+    "waiting": "Waiting — {{name}} is still working on a previous message…",
+    "stopped": "*(stopped)*",
+    "permRetryPrompt": "(Previously couldn't perform task due to lack of permissions. User approved permissions. Please continue with the original request.)\n\nUser's original request: {{request}}"
+  },
+  "label": {
+    "name": "Name",
+    "role": "Role"
+  }
+}

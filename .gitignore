@@ -2,7 +2,9 @@ node_modules
 dist
 release
 .DS_Store
+.ico-temp
 *.log
 .env
 .octopal/uploads/
 .octopal/room-log.json
+*.octo

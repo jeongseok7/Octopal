@@ -77,7 +77,7 @@ export function EmojiPicker({ value, onChange, name, color, onColorChange }: Emo
           type="button"
           className="emoji-picker-trigger avatar-trigger"
           onClick={() => setIsOpen(!isOpen)}
-          title="클릭하여 아바타 변경"
+          title="Click to change avatar"
         >
           <AgentAvatar name={name || '?'} icon={value || undefined} color={currentColor} size="md" />
         </button>
@@ -135,7 +135,7 @@ export function EmojiPicker({ value, onChange, name, color, onColorChange }: Emo
         )}
       </div>
 
-      <span className="avatar-config-hint">클릭하여 아바타 변경</span>
+      <span className="avatar-config-hint">Click to change avatar</span>
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface CreateWorkspaceModalProps {
   canCancel: boolean
@@ -7,6 +8,7 @@ interface CreateWorkspaceModalProps {
 }
 
 export function CreateWorkspaceModal({ canCancel, onClose, onCreated }: CreateWorkspaceModalProps) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
 
   return (
@@ -18,18 +20,17 @@ export function CreateWorkspaceModal({ canCancel, onClose, onCreated }: CreateWo
           </div>
         )}
         <div className="modal-title" style={!canCancel ? { textAlign: 'center' } : undefined}>
-          {canCancel ? 'New workspace' : 'Welcome to Octopal'}
+          {canCancel ? t('modals.createWorkspace.title') : t('modals.createWorkspace.welcomeTitle')}
         </div>
         {!canCancel && (
           <div className="modal-hint" style={{ textAlign: 'center' }}>
-            Start by creating a workspace. You can have multiple workspaces for different contexts
-            — work, side projects, experiments.
+            {t('modals.createWorkspace.hint')}
           </div>
         )}
-        <label className="modal-label">Workspace name</label>
+        <label className="modal-label">{t('modals.createWorkspace.nameLabel')}</label>
         <input
           className="modal-input"
-          placeholder="Personal"
+          placeholder={t('modals.createWorkspace.namePlaceholder')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
@@ -40,7 +41,7 @@ export function CreateWorkspaceModal({ canCancel, onClose, onCreated }: CreateWo
         <div className="modal-actions">
           {canCancel && (
             <button className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
           )}
           <button
@@ -48,7 +49,7 @@ export function CreateWorkspaceModal({ canCancel, onClose, onCreated }: CreateWo
             disabled={!name.trim()}
             onClick={() => onCreated(name)}
           >
-            Create
+            {t('common.create')}
           </button>
         </div>
       </div>

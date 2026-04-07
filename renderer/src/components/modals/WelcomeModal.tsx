@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import confetti from 'canvas-confetti'
 
 interface WelcomeModalProps {
@@ -6,10 +7,10 @@ interface WelcomeModalProps {
 }
 
 export function WelcomeModal({ onPickFolder }: WelcomeModalProps) {
+  const { t } = useTranslation()
+
   useEffect(() => {
-    // 모달 마운트 후 살짝 딜레이 → 폭죽!
     const timer = setTimeout(() => {
-      // 왼쪽에서 발사
       confetti({
         particleCount: 60,
         angle: 60,
@@ -20,7 +21,6 @@ export function WelcomeModal({ onPickFolder }: WelcomeModalProps) {
         ticks: 120,
         disableForReducedMotion: true,
       })
-      // 오른쪽에서 발사
       confetti({
         particleCount: 60,
         angle: 120,
@@ -42,14 +42,14 @@ export function WelcomeModal({ onPickFolder }: WelcomeModalProps) {
         <div className="welcome-mascot welcome-mascot--lg">
           <img src="logo.png" alt="Octopal" className="welcome-mascot-img welcome-mascot-img--lg" />
         </div>
-        <div className="welcome-title">Welcome to Octopal!</div>
+        <div className="welcome-title">{t('modals.welcome.title')}</div>
         <div className="welcome-desc">
-          Start by opening a project folder
-          <br />
-          to chat with your AI teammates.
+          {t('modals.welcome.desc').split('\n').map((line, i) => (
+            <span key={i}>{line}{i === 0 && <br />}</span>
+          ))}
         </div>
         <button className="btn-primary welcome-cta" onClick={onPickFolder}>
-          Open Folder
+          {t('modals.welcome.openFolder')}
         </button>
       </div>
     </div>

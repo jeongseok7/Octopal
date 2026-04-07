@@ -1,0 +1,206 @@
+{
+  "common": {
+    "cancel": "취소",
+    "save": "저장",
+    "saving": "저장 중…",
+    "delete": "삭제",
+    "create": "만들기",
+    "loading": "로딩 중...",
+    "edit": "편집",
+    "preview": "미리보기",
+    "approve": "승인",
+    "dismiss": "무시",
+    "grant": "허용",
+    "ok": "확인"
+  },
+  "settings": {
+    "title": "설정",
+    "tabs": {
+      "general": "일반",
+      "agents": "에이전트",
+      "appearance": "외관",
+      "shortcuts": "단축키",
+      "about": "정보"
+    },
+    "general": {
+      "title": "일반",
+      "restoreWorkspace": "시작 시 마지막 워크스페이스 복원",
+      "restoreWorkspaceDesc": "앱 시작 시 마지막으로 사용한 워크스페이스를 자동으로 엽니다",
+      "launchAtLogin": "로그인 시 자동 실행",
+      "launchAtLoginDesc": "로그인할 때 Octopal을 자동으로 시작합니다"
+    },
+    "language": {
+      "title": "언어",
+      "desc": "앱의 표시 언어를 선택하세요"
+    },
+    "agents": {
+      "title": "기본 에이전트 권한",
+      "desc": "새 에이전트는 이 권한으로 시작합니다. 에이전트 설정에서 개별적으로 변경할 수 있습니다.",
+      "fileWrite": "파일 쓰기",
+      "fileWriteDesc": "에이전트가 파일을 생성하고 편집할 수 있도록 허용",
+      "shell": "셸 명령어",
+      "shellDesc": "에이전트가 bash/셸 명령어를 실행할 수 있도록 허용",
+      "network": "네트워크 접근",
+      "networkDesc": "에이전트가 웹 요청을 할 수 있도록 허용"
+    },
+    "appearance": {
+      "title": "외관",
+      "theme": "테마",
+      "themeDark": "다크",
+      "themeComingSoon": "라이트 및 시스템 테마는 곧 추가될 예정입니다",
+      "chatFontSize": "채팅 글꼴 크기"
+    },
+    "shortcuts": {
+      "title": "키보드 단축키",
+      "comingSoon": "단축키 사용자 지정 기능은 향후 업데이트에서 제공될 예정입니다.",
+      "sendMessage": "메시지 보내기",
+      "newLine": "줄 바꿈",
+      "mentionAgent": "에이전트 멘션",
+      "stopAllAgents": "모든 에이전트 중지"
+    },
+    "about": {
+      "title": "Octopal 정보",
+      "version": "버전",
+      "electron": "Electron",
+      "node": "Node.js",
+      "github": "GitHub",
+      "checkUpdates": "업데이트 확인",
+      "copyright": "Made with ❤️ by Gilhyun"
+    },
+    "unsavedChanges": "저장하지 않은 변경사항"
+  },
+  "chat": {
+    "placeholder": "메시지를 입력하세요… (@이름으로 특정 에이전트에게, @all로 전체에게)",
+    "placeholderDisabled": "폴더를 열어 채팅을 시작하세요",
+    "noFolder": "폴더 없음",
+    "openFolderToStart": "폴더를 열어 시작하세요",
+    "createWorkspaceToStart": "워크스페이스를 만들어 시작하세요",
+    "agentCount": "에이전트 {{count}}명",
+    "agentCount_other": "에이전트 {{count}}명",
+    "dropFiles": "파일을 여기에 놓으세요",
+    "loadingOlder": "이전 메시지 로딩 중…",
+    "scrollUpOlder": "↑ 위로 스크롤하면 이전 메시지를 볼 수 있어요",
+    "emptyTitle": "Octopal",
+    "emptyWithFolder": "@이름으로 에이전트에게 말하세요. @all로 모두에게.",
+    "emptyNoFolder": "폴더를 열어 시작하세요.",
+    "routing": "적절한 에이전트에게 메시지를 전달하는 중…",
+    "scrollToBottom": "맨 아래로",
+    "attachFile": "파일 첨부",
+    "removeAttachment": "첨부 파일 제거",
+    "stopAllAgents": "모든 에이전트 중지",
+    "callTargets": "{{targets}}에게 전달할까요?",
+    "handoffDismissed": "핸드오프 무시됨",
+    "handoffApproved": "핸드오프 승인됨",
+    "grantPermission": "🔐 {{permissions}} 권한을 허용할까요?",
+    "permissionGranted": "✅ 권한 허용됨",
+    "permissionDismissed": "권한 거부됨",
+    "permFileWrite": "파일 쓰기",
+    "permShell": "셸",
+    "permNetwork": "네트워크",
+    "pastedText": "붙여넣은 텍스트",
+    "pastedTextError": "텍스트를 불러올 수 없습니다",
+    "chars": "자",
+    "showMore": "더 보기",
+    "showLess": "접기"
+  },
+  "sidebar": {
+    "wiki": "위키",
+    "activity": "활동",
+    "settings": "설정",
+    "addFolder": "폴더 추가",
+    "newWorkspace": "+ 새 워크스페이스",
+    "removeWorkspace": "워크스페이스 삭제",
+    "removeFolderConfirm": "{{name}}을(를) 목록에서 제거할까요?",
+    "collapseSidebar": "사이드바 접기",
+    "expandSidebar": "사이드바 펼치기",
+    "collapseAgents": "에이전트 패널 숨기기",
+    "expandAgents": "에이전트 패널 보기"
+  },
+  "agents": {
+    "title": "에이전트",
+    "addAgent": "에이전트 추가",
+    "editAgent": "에이전트 편집",
+    "noAgents": "이 폴더에 .octo 파일이 없습니다",
+    "openFolderFirst": "먼저 폴더를 여세요",
+    "canUseTools": "도구 사용 가능",
+    "clickToMention": "클릭하여 멘션, 우클릭하여 편집",
+    "limit": "에이전트 제한",
+    "limitMsg": "폴더당 최대 <strong>{{max}}명</strong>의 에이전트만 생성할 수 있습니다.<br />기존 에이전트를 삭제한 후 다시 시도해주세요."
+  },
+  "modals": {
+    "welcome": {
+      "title": "Octopal에 오신 것을 환영합니다!",
+      "desc": "프로젝트 폴더를 열어\nAI 팀원들과 대화를 시작하세요.",
+      "openFolder": "폴더 열기"
+    },
+    "createAgent": {
+      "title": "새 에이전트",
+      "namePlaceholder": "reviewer",
+      "rolePlaceholder": "코드 리뷰어, 보안 중심",
+      "permissions": "권한",
+      "permissionsHint": "아무 권한도 없으면 에이전트는 텍스트 답변만 할 수 있습니다. 하나를 켜면 실행 가능해집니다.",
+      "permFileWrite": "파일 쓰기 / 편집",
+      "permShell": "셸 명령어 실행",
+      "permNetwork": "네트워크 접근",
+      "allowPaths": "허용 경로 (쉼표로 구분된 glob)",
+      "allowPathsPlaceholder": "src/**, tests/**",
+      "denyPaths": "차단 경로",
+      "denyPathsPlaceholder": ".env, secrets/**"
+    },
+    "editAgent": {
+      "title": "에이전트 편집",
+      "deleteConfirm": "{{name}}을(를) 삭제할까요? .octo 파일이 영구적으로 제거됩니다."
+    },
+    "createWorkspace": {
+      "title": "새 워크스페이스",
+      "welcomeTitle": "Octopal에 오신 것을 환영합니다",
+      "hint": "워크스페이스를 만들어 시작하세요. 업무, 사이드 프로젝트, 실험 등 다양한 맥락에 맞는 워크스페이스를 여러 개 만들 수 있습니다.",
+      "nameLabel": "워크스페이스 이름",
+      "namePlaceholder": "개인"
+    },
+    "openFolder": {
+      "desc": "프로젝트 폴더를 열어 시작하세요.",
+      "openFolder": "폴더 열기"
+    }
+  },
+  "activity": {
+    "title": "최근 활동",
+    "empty": "아직 활동이 없습니다",
+    "toolCreated": "생성",
+    "toolEdited": "편집",
+    "toolRan": "실행",
+    "toolFetched": "가져옴",
+    "justNow": "방금",
+    "secondsAgo": "{{n}}초 전",
+    "minutesAgo": "{{n}}분 전",
+    "hoursAgo": "{{n}}시간 전",
+    "daysAgo": "{{n}}일 전"
+  },
+  "wiki": {
+    "title": "위키",
+    "newPage": "새 페이지",
+    "noPages": "아직 페이지가 없습니다",
+    "emptyTitle": "프로젝트 위키",
+    "emptyDesc": "팀 전체가 읽고 쓸 수 있는 공유 노트입니다.\n페이지를 만들어 시작하세요.",
+    "newPageTitle": "새 위키 페이지",
+    "nameLabel": "이름",
+    "namePlaceholder": "목표, 결정사항, 디자인 시스템…",
+    "discardChanges": "저장하지 않은 변경사항을 버릴까요?",
+    "deleteConfirm": "{{name}}을(를) 삭제할까요?",
+    "editorPlaceholder": "마크다운으로 작성하세요…",
+    "emptyContent": "_(비어 있음)_"
+  },
+  "app": {
+    "windowLimit": "윈도우는 최대 {{max}}개까지 열 수 있어요.",
+    "removeWorkspaceConfirm": "이 워크스페이스를 삭제할까요? 폴더는 디스크에 그대로 남습니다.",
+    "scanningProject": "프로젝트 스캔 중…",
+    "thinking": "생각하는 중…",
+    "waiting": "대기 중 — {{name}}이(가) 이전 메시지를 처리하고 있어요…",
+    "stopped": "*(중지됨)*",
+    "permRetryPrompt": "(이전에 권한이 없어서 작업을 수행하지 못했습니다. 사용자가 권한을 승인했습니다. 이전 요청을 이어서 수행해주세요.)\n\n사용자의 원래 요청: {{request}}"
+  },
+  "label": {
+    "name": "이름",
+    "role": "역할"
+  }
+}

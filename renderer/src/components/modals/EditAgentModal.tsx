@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EmojiPicker } from '../EmojiPicker'
 
 interface EditAgentModalProps {
@@ -9,6 +10,7 @@ interface EditAgentModalProps {
 }
 
 export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgentModalProps) {
+  const { t } = useTranslation()
   const [name, setName] = useState(agent.name)
   const [role, setRole] = useState(agent.role)
   const [icon, setIcon] = useState(agent.icon || '')
@@ -48,7 +50,7 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
   }
 
   const remove = async () => {
-    if (!confirm(`Delete ${agent.name}? This removes the .octo file permanently.`)) return
+    if (!confirm(t('modals.editAgent.deleteConfirm', { name: agent.name }))) return
     const res = await window.api.deleteOcto(agent.path)
     if (res.ok) onDeleted()
     else setError(res.error)
@@ -57,7 +59,7 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">Edit agent</div>
+        <div className="modal-title">{t('modals.editAgent.title')}</div>
 
         <EmojiPicker
           value={icon}
@@ -67,23 +69,23 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
           onColorChange={setColor}
         />
 
-        <label className="modal-label">Name</label>
+        <label className="modal-label">{t('label.name')}</label>
         <input
           className="modal-input"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
 
-        <label className="modal-label">Role</label>
+        <label className="modal-label">{t('label.role')}</label>
         <textarea
           className="modal-textarea"
           value={role}
           onChange={(e) => setRole(e.target.value)}
         />
 
-        <label className="modal-label">Permissions</label>
+        <label className="modal-label">{t('modals.createAgent.permissions')}</label>
         <div className="modal-hint" style={{ marginTop: 0 }}>
-          Without any of these, the agent can only reply with text. Turn one on to let it act.
+          {t('modals.createAgent.permissionsHint')}
         </div>
         <div className="perm-row">
           <label className="perm-toggle">
@@ -92,7 +94,7 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
               checked={fileWrite}
               onChange={(e) => setFileWrite(e.target.checked)}
             />
-            <span>Write / edit files</span>
+            <span>{t('modals.createAgent.permFileWrite')}</span>
           </label>
           <label className="perm-toggle">
             <input
@@ -100,7 +102,7 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
               checked={bash}
               onChange={(e) => setBash(e.target.checked)}
             />
-            <span>Run shell commands</span>
+            <span>{t('modals.createAgent.permShell')}</span>
           </label>
           <label className="perm-toggle">
             <input
@@ -108,22 +110,22 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
               checked={network}
               onChange={(e) => setNetwork(e.target.checked)}
             />
-            <span>Access the network</span>
+            <span>{t('modals.createAgent.permNetwork')}</span>
           </label>
         </div>
 
-        <label className="modal-label">Allow paths (comma-separated globs)</label>
+        <label className="modal-label">{t('modals.createAgent.allowPaths')}</label>
         <input
           className="modal-input"
-          placeholder="src/**, tests/**"
+          placeholder={t('modals.createAgent.allowPathsPlaceholder')}
           value={allowPaths}
           onChange={(e) => setAllowPaths(e.target.value)}
         />
 
-        <label className="modal-label">Deny paths</label>
+        <label className="modal-label">{t('modals.createAgent.denyPaths')}</label>
         <input
           className="modal-input"
-          placeholder=".env, secrets/**"
+          placeholder={t('modals.createAgent.denyPathsPlaceholder')}
           value={denyPaths}
           onChange={(e) => setDenyPaths(e.target.value)}
         />
@@ -132,14 +134,14 @@ export function EditAgentModal({ agent, onClose, onSaved, onDeleted }: EditAgent
 
         <div className="modal-actions">
           <button className="btn-danger" onClick={remove}>
-            Delete
+            {t('common.delete')}
           </button>
           <div style={{ flex: 1 }} />
           <button className="btn-secondary" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button className="btn-primary" onClick={save}>
-            Save
+            {t('common.save')}
           </button>
         </div>
       </div>
