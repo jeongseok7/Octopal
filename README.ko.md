@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshot.png" alt="Octopal Screenshot" width="800" />
+  <img src="screenshot2.png" alt="Octopal Screenshot" width="800" />
 </p>
 
 ---
@@ -64,6 +64,10 @@ Octopal은 클로드 코드 위에서 작동하는 멀티 에이전트 채팅앱
 - 워크스페이스 생성/이름변경/삭제
 - 멀티 폴더 관리 (폴더 추가/제거)
 - `.octo` 파일 변경 감지 (파일 시스템 워치)
+
+<p align="center">
+  <img src="screenshot.png" alt="Octopal Features" width="800" />
+</p>
 
 ## 사전 준비
 

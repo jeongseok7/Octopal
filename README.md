@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshot.png" alt="Octopal Screenshot" width="800" />
+  <img src="screenshot2.png" alt="Octopal Screenshot" width="800" />
 </p>
 
 ---
@@ -64,6 +64,10 @@ All agent data is stored as `.octo` files in your project folder — everything 
 - Create/rename/delete workspaces
 - Multi-folder management (add/remove folders)
 - `.octo` file change detection (file system watch)
+
+<p align="center">
+  <img src="screenshot.png" alt="Octopal Features" width="800" />
+</p>
 
 ## Prerequisites
 
