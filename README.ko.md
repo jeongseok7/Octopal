@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Group Chat with your Claude Code Agents</strong><br />
+  <strong>Agentic workplace messenger<br />for Claude Code</strong><br />
   Collaborate with your Claude Code agents more efficiently.<br />
   A group chat interface where multiple agents work together in real time.
 </p>
