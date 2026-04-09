@@ -44,7 +44,7 @@ All agent data is stored as `.octo` files in your project folder — everything 
 Octopal's uniquely simple structure instantly turns your PC into your own company.
 Folders are teams, files are agents, and folders come together to form a workspace.
 
-No cloud, no accounts — just your computer and your AI company.
+No complex setup, no cloud — just your computer and your AI company.
 
 ## Features
 
