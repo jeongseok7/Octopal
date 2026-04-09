@@ -353,6 +353,10 @@ function extendedPath(): string {
     path.join(home, '.cargo', 'bin'),           // rust / cargo
     path.join(home, 'Library', 'pnpm'),         // pnpm global
     ...detectNvmNodeBins(),                     // nvm (all installed versions)
+    path.join(home, '.local', 'share', 'fnm', 'aliases', 'default', 'bin'), // fnm (default alias)
+    path.join(home, '.fnm', 'aliases', 'default', 'bin'),                   // fnm (legacy path)
+    path.join(home, '.asdf', 'shims'),          // asdf
+    path.join(home, '.local', 'share', 'mise', 'shims'), // mise (rtx)
   ]
 
   // Merge: current PATH + shell PATH + manual extras, deduplicating
