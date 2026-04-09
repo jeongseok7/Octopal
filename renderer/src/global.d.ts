@@ -133,10 +133,77 @@ interface Window {
       message: string
       agents: Array<{ name: string; role: string }>
       recentHistory: Array<{ agentName: string; text: string }>
+      folderPath?: string
     }) => Promise<
       | { ok: true; leader: string; collaborators: string[] }
       | { ok: false; error: string }
     >
+
+    // Observer
+    observerUpdate: (params: {
+      folderPath: string
+      message: { agentName: string; text: string; ts: number; mentions?: string[] }
+    }) => Promise<{ ok: true }>
+    observerGetContext: (folderPath: string) => Promise<{
+      ok: true
+      context: {
+        currentTopic: string | null
+        recentTopics: string[]
+        agentActivity: Record<string, {
+          lastActiveTs: number
+          messageCount: number
+          lastWorkingOn: string
+          recentKeywords: string[]
+        }>
+        pendingMentions: string[]
+        conversationPhase: 'idle' | 'planning' | 'implementation' | 'review' | 'discussion'
+        messageCount: number
+        lastRespondent: string | null
+        lastActivityTs: number
+      }
+    }>
+    observerReset: (folderPath: string) => Promise<{ ok: true }>
+
+    // SmartObserver (Layer 1 — LLM-powered context tracker)
+    smartObserverGetContext: (folderPath: string) => Promise<{
+      ok: true
+      context: {
+        rule: {
+          currentTopic: string | null
+          recentTopics: string[]
+          agentActivity: Record<string, {
+            lastActiveTs: number
+            messageCount: number
+            lastWorkingOn: string
+            recentKeywords: string[]
+          }>
+          pendingMentions: string[]
+          conversationPhase: 'idle' | 'planning' | 'implementation' | 'review' | 'discussion'
+          messageCount: number
+          lastRespondent: string | null
+          lastActivityTs: number
+        }
+        llm: {
+          conversationSummary: string
+          currentTopic: string
+          topicHistory: string[]
+          conversationPhase: string
+          agentContext: Record<string, {
+            workingOn: string
+            lastContribution: string
+          }>
+          userIntent: string
+          openThreads: string[]
+          updatedAt: number
+        } | null
+      }
+    }>
+    smartObserverForceRefresh: (folderPath: string) => Promise<
+      | { ok: true; llm: any }
+      | { ok: false; error: string }
+    >
+    smartObserverSetEnabled: (enabled: boolean) => Promise<{ ok: true }>
+
     classifyMention: (params: {
       speakerName: string
       speakerText: string

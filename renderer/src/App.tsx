@@ -658,6 +658,17 @@ export function App() {
       }
     }
 
+    // ── Observer: track user message ─────────────────────
+    window.api.observerUpdate({
+      folderPath,
+      message: {
+        agentName: 'user',
+        text: combinedText,
+        ts: userTs,
+        mentions: bufferedMessages.flatMap((m) => parseMentions(m.text)),
+      },
+    })
+
     // ── Routing ─────────────────────────────────────────
     const allMentions = bufferedMessages.flatMap((m) => parseMentions(m.text))
     let leader: OctoFile | null = null
@@ -705,6 +716,7 @@ export function App() {
           message: combinedText,
           agents: visibleAgents.map((r) => ({ name: r.name, role: r.role })),
           recentHistory: recent,
+          folderPath,
         })
         setMessages((prev) => ({
           ...prev,
@@ -867,6 +879,20 @@ export function App() {
         ),
       }
     })
+
+    // ── Observer: track agent response ──────────────────
+    if (res.ok && res.output !== '[interrupted]') {
+      const agentMentions = parseMentions(res.output)
+      window.api.observerUpdate({
+        folderPath: folderPathAtStart,
+        message: {
+          agentName: target.name,
+          text: res.output,
+          ts: Date.now(),
+          mentions: agentMentions.length > 0 ? agentMentions : undefined,
+        },
+      })
+    }
 
     // Chain: parse @mentions from the agent's response
     if (!res.ok || depth >= MAX_CHAIN_DEPTH) return

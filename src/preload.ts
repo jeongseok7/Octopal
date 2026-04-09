@@ -89,7 +89,26 @@ contextBridge.exposeInMainWorld('api', {
     message: string
     agents: Array<{ name: string; role: string }>
     recentHistory: Array<{ agentName: string; text: string }>
+    folderPath?: string
   }) => ipcRenderer.invoke('dispatcher:route', params),
+
+  // ── Observer ──
+  observerUpdate: (params: {
+    folderPath: string
+    message: { agentName: string; text: string; ts: number; mentions?: string[] }
+  }) => ipcRenderer.invoke('observer:update', params),
+  observerGetContext: (folderPath: string) =>
+    ipcRenderer.invoke('observer:getContext', { folderPath }),
+  observerReset: (folderPath: string) =>
+    ipcRenderer.invoke('observer:reset', { folderPath }),
+
+  // ── SmartObserver ──
+  smartObserverGetContext: (folderPath: string) =>
+    ipcRenderer.invoke('smartObserver:getContext', { folderPath }),
+  smartObserverForceRefresh: (folderPath: string) =>
+    ipcRenderer.invoke('smartObserver:forceRefresh', { folderPath }),
+  smartObserverSetEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('smartObserver:setEnabled', { enabled }),
   classifyMention: (params: {
     speakerName: string
     speakerText: string

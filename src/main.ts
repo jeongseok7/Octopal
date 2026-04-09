@@ -5,6 +5,9 @@ import crypto from 'crypto'
 import os from 'os'
 import { spawn, execFile, ChildProcess } from 'child_process'
 import { isSensitivePath, validateOctoPath, validatePathContainment, sanitizedEnv, sanitizeError, acquireFileLock, classifyPathAccess, validateMcpConfig, type PathAccessClass } from './security'
+import { observer } from './observer'
+import { ruleRouter, CONFIDENCE_THRESHOLD } from './rule-router'
+import { smartObserver } from './smart-observer'
 
 // OCTOPAL_PROD=1 forces the built renderer bundle even when running unpackaged,
 // so `npm start` after `npm run build` behaves like a production app.
@@ -1174,10 +1177,65 @@ When in doubt between handoff and approval, prefer "approval" — the human can 
   }
 })
 
+// ── Observer IPC handlers ──────────────────────────────────────
+
+ipcMain.handle('observer:update', async (_event, params: {
+  folderPath: string
+  message: { agentName: string; text: string; ts: number; mentions?: string[] }
+}) => {
+  observer.update(params.folderPath, params.message)
+  // Also feed SmartObserver (LLM refresh happens in background if triggered)
+  const llmTriggered = await smartObserver.onMessage(params.folderPath, params.message)
+  return { ok: true, llmTriggered }
+})
+
+ipcMain.handle('observer:getContext', async (_event, params: {
+  folderPath: string
+}) => {
+  return { ok: true, context: observer.getContext(params.folderPath) }
+})
+
+ipcMain.handle('observer:reset', async (_event, params: {
+  folderPath: string
+}) => {
+  observer.reset(params.folderPath)
+  smartObserver.reset(params.folderPath)
+  return { ok: true }
+})
+
+// ── SmartObserver IPC handlers ─────────────────────────────────
+
+ipcMain.handle('smartObserver:getContext', async (_event, params: {
+  folderPath: string
+}) => {
+  return { ok: true, context: smartObserver.getContext(params.folderPath) }
+})
+
+ipcMain.handle('smartObserver:forceRefresh', async (_event, params: {
+  folderPath: string
+}) => {
+  try {
+    const llm = await smartObserver.forceRefresh(params.folderPath)
+    return { ok: true, llm }
+  } catch (e: any) {
+    return { ok: false, error: sanitizeError(e, IS_DEV) }
+  }
+})
+
+ipcMain.handle('smartObserver:setEnabled', async (_event, params: {
+  enabled: boolean
+}) => {
+  smartObserver.enabled = params.enabled
+  return { ok: true }
+})
+
+// ── Dispatcher (Router) ───────────────────────────────────────
+
 ipcMain.handle('dispatcher:route', async (_event, params: {
   message: string
   agents: Array<{ name: string; role: string }>
   recentHistory: Array<{ agentName: string; text: string }>
+  folderPath?: string
 }): Promise<
   | { ok: true; leader: string; collaborators: string[] }
   | { ok: false; error: string }
@@ -1185,6 +1243,44 @@ ipcMain.handle('dispatcher:route', async (_event, params: {
   const { message, agents, recentHistory } = params
   if (agents.length === 0) return { ok: false, error: 'no agents' }
 
+  // ── Layer 0: Rule-based routing (cost: $0, latency: ~5ms) ──
+  const observerCtx = params.folderPath
+    ? observer.getContext(params.folderPath)
+    : observer.getContext('__default__')
+
+  // Extract @mentions from the message
+  const mentionPattern = /@(\w+)/g
+  const mentions: string[] = []
+  let mentionMatch: RegExpExecArray | null
+  while ((mentionMatch = mentionPattern.exec(message)) !== null) {
+    mentions.push(mentionMatch[1])
+  }
+
+  const ruleResult = ruleRouter.evaluate({
+    message,
+    agents,
+    observerContext: observerCtx,
+    mentionedAgents: mentions,
+  })
+
+  if (ruleResult.confidence >= CONFIDENCE_THRESHOLD && ruleResult.leader) {
+    console.log(`[RuleRouter] ${ruleResult.rule} (${ruleResult.confidence}) → ${ruleResult.leader} | ${ruleResult.reason}`)
+    return { ok: true, leader: ruleResult.leader, collaborators: ruleResult.collaborators }
+  }
+
+  console.log(`[RuleRouter] confidence ${ruleResult.confidence} < ${CONFIDENCE_THRESHOLD}, falling through to LLM router`)
+
+  // ── Layer 1: SmartObserver forceRefresh (ensure fresh context) ──
+  if (params.folderPath) {
+    try {
+      await smartObserver.forceRefresh(params.folderPath)
+      console.log('[SmartObserver] forceRefresh completed for LLM router')
+    } catch (err) {
+      console.warn('[SmartObserver] forceRefresh failed, using stale/rule context:', err)
+    }
+  }
+
+  // ── Layer 2: LLM Router (fallback) ──
   const agentList = agents.map((a) => `- ${a.name}: ${a.role || 'assistant'}`).join('\n')
   const historyText = recentHistory.length > 0
     ? '\n\nRecent conversation:\n' + recentHistory
@@ -1192,10 +1288,18 @@ ipcMain.handle('dispatcher:route', async (_event, params: {
         .join('\n')
     : ''
 
+  // ── Observer context injection (prefer SmartObserver's richer output) ──
+  const observerText = params.folderPath
+    ? smartObserver.serialize(params.folderPath)
+    : observer.serialize('__default__')
+  const observerSection = observerText
+    ? `\n\nConversation context (tracked by Observer):\n${observerText}`
+    : ''
+
   const systemPrompt = `You are a message dispatcher in a group chat of AI agents. Given a user message, recent conversation context, and a list of agents with their roles, decide WHO should lead the response and who should collaborate.
 
 Available agents:
-${agentList}${historyText}
+${agentList}${historyText}${observerSection}
 
 Output format — reply with ONLY a JSON object, nothing else:
 {"leader": "<name>", "collaborators": ["<name>", ...]}
@@ -1204,6 +1308,7 @@ Rules for choosing the leader:
 - The leader is the ONE agent who will start the response. If the task requires concrete action (writing files, running commands, implementing something), the leader should be the agent whose role matches that action. When in doubt, the implementer leads.
 - If the user is clearly continuing a conversation with a specific agent (short replies like "why?", "explain more", "ok do it"), that agent is the leader.
 - If the message is small talk or ambiguous, pick the most generally-suited single agent as leader, with empty collaborators.
+- Use the Observer context (if available) to understand the full conversation flow — it tracks which agents have been active, what topics are being discussed, and what phase the conversation is in. This helps you route correctly even when the recent messages alone are ambiguous.
 
 Rules for collaborators:
 - Only include collaborators when their expertise is clearly needed in addition to the leader's.
