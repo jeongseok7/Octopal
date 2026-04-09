@@ -841,27 +841,32 @@ export function App() {
       .filter((a) => a.type === 'text')
       .map((a) => a.path)
 
-    const res = await window.api.sendMessage({
-      folderPath: folderPathAtStart,
-      octoPath: target.path,
-      prompt,
-      userTs,
-      runId,
-      peers,
-      collaborators: collaboratorPayload,
-      isLeader,
-      imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
-      textPaths: textPaths.length > 0 ? textPaths : undefined,
-    })
+    let res: { ok: boolean; output: string; error?: string }
+    try {
+      res = await window.api.sendMessage({
+        folderPath: folderPathAtStart,
+        octoPath: target.path,
+        prompt,
+        userTs,
+        runId,
+        peers,
+        collaborators: collaboratorPayload,
+        isLeader,
+        imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+        textPaths: textPaths.length > 0 ? textPaths : undefined,
+      })
+    } catch (err) {
+      res = { ok: false, output: '', error: String(err) }
+    } finally {
+      runMapRef.current.delete(runId)
+      activeRunsRef.current.delete(lockKey)
 
-    runMapRef.current.delete(runId)
-    activeRunsRef.current.delete(lockKey)
-
-    // Release our lock slot so the next queued caller can proceed.
-    if (agentLocksRef.current.get(lockKey) === ourLock) {
-      agentLocksRef.current.delete(lockKey)
+      // Release our lock slot so the next queued caller can proceed.
+      if (agentLocksRef.current.get(lockKey) === ourLock) {
+        agentLocksRef.current.delete(lockKey)
+      }
+      release()
     }
-    release()
 
     // Handle interrupted responses — remove the pending bubble silently
     if (res.ok && res.output === '[interrupted]') {
@@ -927,11 +932,16 @@ export function App() {
 
     // Ask the classifier whether this is a real handoff, a proposal that needs
     // user approval, or just a passing reference.
-    const classification = await window.api.classifyMention({
-      speakerName: target.name,
-      speakerText: res.output,
-      mentionedNames: nextTargets.map((r) => r.name),
-    })
+    let classification: { ok: boolean; decision?: string }
+    try {
+      classification = await window.api.classifyMention({
+        speakerName: target.name,
+        speakerText: res.output,
+        mentionedNames: nextTargets.map((r) => r.name),
+      })
+    } catch {
+      classification = { ok: false }
+    }
 
     const decision =
       classification.ok ? classification.decision : 'approval'

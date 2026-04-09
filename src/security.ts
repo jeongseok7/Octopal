@@ -175,10 +175,19 @@ const fileLocks = new Map<string, Promise<void>>()
  */
 export async function acquireFileLock(filePath: string): Promise<() => void> {
   const key = filePath.toLowerCase() // normalize for case-insensitive FS (macOS)
+  const LOCK_TIMEOUT_MS = 30_000 // 30s safety timeout
 
-  // Wait for any existing lock on this file
+  // Wait for any existing lock on this file (with timeout to prevent deadlocks)
   while (fileLocks.has(key)) {
-    await fileLocks.get(key)
+    const existing = fileLocks.get(key)
+    if (!existing) break
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, LOCK_TIMEOUT_MS))
+    await Promise.race([existing, timeout])
+    // If still locked after timeout, force-release the stale lock
+    if (fileLocks.get(key) === existing) {
+      fileLocks.delete(key)
+      break
+    }
   }
 
   let releaseFn!: () => void
@@ -190,6 +199,22 @@ export async function acquireFileLock(filePath: string): Promise<() => void> {
   })
 
   fileLocks.set(key, lockPromise)
+
+  // Safety net: auto-release after timeout to prevent permanent deadlocks
+  const safetyTimer = setTimeout(() => {
+    if (fileLocks.get(key) === lockPromise) {
+      fileLocks.delete(key)
+      // resolve so any waiters unblock
+      releaseFn()
+    }
+  }, LOCK_TIMEOUT_MS)
+
+  const originalRelease = releaseFn
+  releaseFn = () => {
+    clearTimeout(safetyTimer)
+    originalRelease()
+  }
+
   return releaseFn
 }
 
