@@ -103,7 +103,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('wiki:write', params),
   wikiDelete: (params: { workspaceId: string; name: string }) =>
     ipcRenderer.invoke('wiki:delete', params),
+  stopAgent: (runId: string) => ipcRenderer.invoke('agent:stop', runId),
   stopAllAgents: () => ipcRenderer.invoke('agent:stopAll'),
+  checkContext: (params: {
+    originalPrompt: string
+    newMessage: string
+    agentName: string
+  }) => ipcRenderer.invoke('dispatcher:checkContext', params),
   getPlatform: () => ipcRenderer.invoke('app:getPlatform'),
 
   // ── File Access Approval ──

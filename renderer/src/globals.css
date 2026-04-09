@@ -2331,6 +2331,13 @@ button {
   font-style: italic;
 }
 
+.dispatcher-indicator.system-message {
+  font-style: normal;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+}
+
 .dispatcher-dot {
   display: inline-block;
   width: 6px;

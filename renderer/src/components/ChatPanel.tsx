@@ -521,11 +521,19 @@ export function ChatPanel({
         {folderMessages.map((m) => {
           const isUser = m.agentName === 'user'
           const isDispatcher = m.agentName === '__dispatcher__'
+          const isSystem = m.agentName === '__system__'
           if (isDispatcher) {
             return (
               <div key={m.id} className="dispatcher-indicator">
                 <span className="dispatcher-dot" />
                 {t('chat.routing')}
+              </div>
+            )
+          }
+          if (isSystem) {
+            return (
+              <div key={m.id} className="dispatcher-indicator system-message">
+                {m.text}
               </div>
             )
           }

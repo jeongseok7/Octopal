@@ -60,6 +60,14 @@ export function App() {
   // two Claude processes in parallel (which would corrupt history and race on files).
   const agentLocksRef = useRef<Map<string, Promise<void>>>(new Map())
 
+  // Track active agent runs for bundling/interrupt — key is `${folderPath}::${agentNameLower}`
+  const activeRunsRef = useRef<Map<string, {
+    agentName: string
+    runId: string
+    prompt: string
+    userTs: number
+  }>>(new Map())
+
   // Debounce buffer: collect consecutive user messages before triggering agents
   const DEBOUNCE_MS = 1200
   const bufferRef = useRef<{
@@ -541,7 +549,7 @@ export function App() {
     const bufferedMessages = buf.messages
     bufferRef.current = null
 
-    const combinedText =
+    let combinedText =
       bufferedMessages.length === 1
         ? bufferedMessages[0].text
         : bufferedMessages.map((m, i) => `(${i + 1}) ${m.text}`).join('\n')
@@ -553,6 +561,62 @@ export function App() {
 
     const userTs = bufferedMessages[0].ts
 
+    // ── Message Bundling & Interrupt ────────────────────
+    // Check if any agent is currently running in this folder.
+    // If so, determine if the new message is related (supplement/modify)
+    // and interrupt + bundle if needed.
+    const runningInFolder = Array.from(activeRunsRef.current.entries())
+      .filter(([key]) => key.startsWith(`${folderPath}::`))
+
+    if (runningInFolder.length > 0) {
+      const [activeKey, activeRun] = runningInFolder[0]
+      try {
+        const contextRes = await window.api.checkContext({
+          originalPrompt: activeRun.prompt,
+          newMessage: combinedText,
+          agentName: activeRun.agentName,
+        })
+
+        if (contextRes.ok && contextRes.decision !== 'unrelated') {
+          // Interrupt the running agent
+          await window.api.stopAgent(activeRun.runId)
+
+          // Show system message about bundling
+          const bundleMsgId = `bundle-${Date.now()}`
+          const isModify = contextRes.decision === 'modify'
+          setMessages((prev) => ({
+            ...prev,
+            [folderPath]: [
+              ...(prev[folderPath] || []),
+              {
+                id: bundleMsgId,
+                agentName: '__system__',
+                text: isModify
+                  ? `⏸️ @${activeRun.agentName} 작업을 중지하고 수정된 지시를 전달합니다.`
+                  : `📦 메시지를 묶어서 @${activeRun.agentName}에게 다시 전달합니다.`,
+                ts: Date.now(),
+                pending: false,
+              },
+            ],
+          }))
+
+          // Use the bundled prompt from LLM, or fallback
+          if (contextRes.bundledPrompt) {
+            combinedText = contextRes.bundledPrompt
+          } else if (!isModify) {
+            // Supplement fallback: merge original + new
+            combinedText = `${activeRun.prompt}\n\n추가 지시: ${combinedText}`
+          }
+          // For modify without bundledPrompt, just use combinedText as-is (the new message replaces)
+        }
+        // For 'unrelated', proceed normally — the running agent keeps going,
+        // new message gets routed separately.
+      } catch {
+        // Context check failed — proceed normally (conservative: don't interrupt)
+      }
+    }
+
+    // ── Routing ─────────────────────────────────────────
     const allMentions = bufferedMessages.flatMap((m) => parseMentions(m.text))
     let leader: OctoFile | null = null
     let collaborators: OctoFile[] = []
@@ -592,7 +656,7 @@ export function App() {
           ],
         }))
         const recent = (messages[folderPath] || [])
-          .filter((m) => m.agentName !== '__dispatcher__' && !m.pending)
+          .filter((m) => m.agentName !== '__dispatcher__' && m.agentName !== '__system__' && !m.pending)
           .slice(-6)
           .map((m) => ({ agentName: m.agentName, text: m.text }))
         const res = await window.api.dispatch({
@@ -689,6 +753,14 @@ export function App() {
     const isLeader = depth === 0 && collaborators.length > 0
     const collaboratorPayload = collaborators.map((c) => ({ name: c.name, role: c.role }))
 
+    // Track this run for bundling/interrupt
+    activeRunsRef.current.set(lockKey, {
+      agentName: target.name,
+      runId,
+      prompt,
+      userTs,
+    })
+
     // Prepare image paths for vision support
     const imagePaths = attachments
       .filter((a) => a.type === 'image')
@@ -713,12 +785,24 @@ export function App() {
     })
 
     runMapRef.current.delete(runId)
+    activeRunsRef.current.delete(lockKey)
 
     // Release our lock slot so the next queued caller can proceed.
     if (agentLocksRef.current.get(lockKey) === ourLock) {
       agentLocksRef.current.delete(lockKey)
     }
     release()
+
+    // Handle interrupted responses — remove the pending bubble silently
+    if (res.ok && res.output === '[interrupted]') {
+      setMessages((prev) => ({
+        ...prev,
+        [folderPathAtStart]: (prev[folderPathAtStart] || []).filter(
+          (m) => m.id !== pendingId
+        ),
+      }))
+      return // Don't chain — bundled re-invocation will handle it
+    }
 
     const rawText = res.ok ? res.output : `Error: ${res.error}`
     const permReq = res.ok ? parsePermissionRequest(rawText, target.name) : undefined

@@ -13,6 +13,9 @@ const IS_DEV = !app.isPackaged && process.env.OCTOPAL_PROD !== '1'
 // Track running agent child processes so we can stop them
 const runningAgents = new Map<string, ChildProcess>()
 
+// Track interrupted runs — these resolve with '[interrupted]' instead of rejecting
+const interruptedRuns = new Set<string>()
+
 // Use a separate state file and userData dir in dev so you can run dev + prod
 // side-by-side without them stomping on each other's workspaces.
 const STATE_DIR = IS_DEV
@@ -1460,8 +1463,14 @@ How to collaborate (very important):
       })
       child.stderr.on('data', (d) => { stderr += d.toString() })
       child.on('close', (code) => {
-        if (code !== 0) reject(new Error(stderr || `exited with ${code}`))
-        else resolve(finalResult.trim())
+        if (interruptedRuns.has(runId)) {
+          interruptedRuns.delete(runId)
+          resolve('[interrupted]')
+        } else if (code !== 0) {
+          reject(new Error(stderr || `exited with ${code}`))
+        } else {
+          resolve(finalResult.trim())
+        }
       })
     })
 
@@ -1484,6 +1493,18 @@ How to collaborate (very important):
   }
 })
 
+// ── Stop a single running agent ──────────────────
+ipcMain.handle('agent:stop', (_event, runId: string) => {
+  const child = runningAgents.get(runId)
+  if (child) {
+    interruptedRuns.add(runId)
+    try { child.kill('SIGTERM') } catch {}
+    runningAgents.delete(runId)
+    return { ok: true }
+  }
+  return { ok: false, error: 'not found' }
+})
+
 // ── Stop all running agents ──────────────────────
 ipcMain.handle('agent:stopAll', () => {
   const count = runningAgents.size
@@ -1494,6 +1515,86 @@ ipcMain.handle('agent:stopAll', () => {
     runningAgents.delete(runId)
   }
   return { ok: true, stopped: count }
+})
+
+// ── Context check for message bundling ───────────
+ipcMain.handle('dispatcher:checkContext', async (_event, params: {
+  originalPrompt: string
+  newMessage: string
+  agentName: string
+}): Promise<
+  | { ok: true; decision: 'supplement' | 'modify' | 'unrelated'; bundledPrompt: string | null }
+  | { ok: false; error: string }
+> => {
+  const { originalPrompt, newMessage, agentName } = params
+
+  const systemPrompt = `You are a context analyzer for a group chat of AI agents. An agent is currently working on a task. A new message arrived from the user. Determine the relationship between the new message and the ongoing task.
+
+Agent "${agentName}" is currently working on:
+"${originalPrompt.slice(0, 500)}"
+
+New message from user:
+"${newMessage.slice(0, 500)}"
+
+Classify the new message as ONE of:
+- "supplement": Additional requirements/details for the SAME task → should bundle together
+- "modify": Correction, replacement, or cancellation of the original instruction → should replace
+- "unrelated": Completely different topic → handle separately, don't interrupt
+
+If "supplement", also provide a "bundledPrompt" that merges both into one coherent instruction.
+If "modify", provide a "bundledPrompt" with just the corrected instruction.
+If "unrelated", set "bundledPrompt" to null.
+
+Reply with ONLY a JSON object, nothing else:
+{"decision": "supplement"|"modify"|"unrelated", "bundledPrompt": "..." or null}`
+
+  try {
+    const claudeArgs = [
+      '-p',
+      '--print',
+      '--mcp-config',
+      '{"mcpServers":{}}',
+      '--strict-mcp-config',
+      '--system-prompt',
+      systemPrompt,
+      '--',
+      `Analyze the context relationship.`,
+    ]
+
+    const output = await new Promise<string>((resolve, reject) => {
+      const child = spawn('claude', claudeArgs, {
+        cwd: os.tmpdir(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: sanitizedEnv(),
+      })
+      let stdout = ''
+      let stderr = ''
+      child.stdout.on('data', (d) => { stdout += d.toString() })
+      child.stderr.on('data', (d) => { stderr += d.toString() })
+      child.on('close', (code) => {
+        if (code !== 0) reject(new Error(stderr || `exited with ${code}`))
+        else resolve(stdout.trim())
+      })
+    })
+
+    const jsonMatch = output.match(/\{[\s\S]*?\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      const decision = parsed.decision
+      if (decision === 'supplement' || decision === 'modify' || decision === 'unrelated') {
+        return {
+          ok: true,
+          decision,
+          bundledPrompt: typeof parsed.bundledPrompt === 'string' ? parsed.bundledPrompt : null,
+        }
+      }
+    }
+
+    // Default to unrelated if parsing fails (conservative — don't interrupt)
+    return { ok: true, decision: 'unrelated', bundledPrompt: null }
+  } catch (e: any) {
+    return { ok: false, error: sanitizeError(e, IS_DEV) }
+  }
 })
 
 // ── File upload handlers ──────────────────────
