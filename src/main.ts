@@ -8,6 +8,15 @@ import { isSensitivePath, validateOctoPath, validatePathContainment, sanitizedEn
 import { observer } from './observer'
 import { ruleRouter, CONFIDENCE_THRESHOLD } from './rule-router'
 import { smartObserver } from './smart-observer'
+import {
+  compressHistory,
+  formatCompressedHistory,
+  compressRouterHistory,
+  COMPACT_WORLD_CONTEXT,
+  COMPACT_APP_CONTEXT,
+  compactWikiSection,
+  compactPeerSection,
+} from './token-optimizer'
 
 // OCTOPAL_PROD=1 forces the built renderer bundle even when running unpackaged,
 // so `npm start` after `npm run build` behaves like a production app.
@@ -1282,16 +1291,12 @@ ipcMain.handle('dispatcher:route', async (_event, params: {
 
   // ── Layer 2: LLM Router (fallback) ──
   const agentList = agents.map((a) => `- ${a.name}: ${a.role || 'assistant'}`).join('\n')
-  const historyText = recentHistory.length > 0
-    ? '\n\nRecent conversation:\n' + recentHistory
-        .map((h) => `${h.agentName === 'user' ? 'User' : h.agentName}: ${h.text.slice(0, 300)}`)
-        .join('\n')
-    : ''
 
   // ── Observer context injection (prefer SmartObserver's richer output) ──
   const observerText = params.folderPath
     ? smartObserver.serialize(params.folderPath)
     : observer.serialize('__default__')
+  const historyText = compressRouterHistory(recentHistory, !!observerText)
   const observerSection = observerText
     ? `\n\nConversation context (tracked by Observer):\n${observerText}`
     : ''
@@ -1436,34 +1441,11 @@ ipcMain.handle('octo:sendMessage', async (_event, params: {
     const agentName = octoContent.name || path.basename(octoPath, '.octo')
     const systemParts: string[] = []
 
-    // ── Octo world context ──
-    // Give every agent a shared understanding of the system they live in.
-    systemParts.push(
-      `You are an agent in Octopal, a group-chat messenger for AI agents.
+    // ── Octo world context (compact) ──
+    systemParts.push(COMPACT_WORLD_CONTEXT)
 
-How your world works:
-- You are a ".octo" file: a JSON file on disk that stores your name, role, memory, and conversation history. Deleting the file deletes you; copying it clones you.
-- Your current project is the folder that contains your .octo file. Think of the folder as a workspace/project and each .octo file inside it as a coworker on that project.
-- Other .octo files in the same folder are your peers. You can talk to them in the group chat by mentioning them with @name — they will see the message and may respond.
-- The human user talks to the whole room and can @mention any agent directly. If no one is mentioned, a dispatcher decides who should respond based on roles and recent context.
-- You persist across sessions: the user can close the app and come back days later, and your memory and history are still there.
-- You are not Claude Code itself. You are a specific agent persona running on top of Claude Code. Stay in character based on your role below.`
-    )
-
-    // ── App Context (L1 + L2) ──
-    // Inject shared knowledge about Octopal so every agent understands the
-    // app it lives in. This costs ~250 tokens and dramatically improves the
-    // agent's ability to guide users.
-    systemParts.push(
-      `\nAbout Octopal — things you should know:
-- **Creating agents**: Anyone can create a new AI teammate by adding a .octo file to the project folder (or asking you to do it). Each .octo file = one agent with its own name, role, and memory.
-- **Mentioning**: Use @name to talk to another agent. The mentioned agent will see the message and respond. The user can also @mention agents directly.
-- **Wiki**: A shared knowledge base for the team. Write .md files to the wiki directory to share notes, decisions, and context across all agents and sessions.
-- **Permissions**: Each agent's capabilities (file write, shell commands, network access) are configured independently. The user controls these in the agent's settings panel.
-- **Workspaces & Folders**: A workspace groups related project folders. Each folder can have its own set of agents. The wiki is shared across all folders in the same workspace.
-- **Activity log**: The user can see a real-time log of everything agents do (tool calls, file edits, etc.) in the sidebar — full transparency.
-- **Hiring teammates**: The user can add specialized agents (developers, designers, planners, reviewers, etc.) to collaborate. Agents can also suggest bringing in a teammate when the task calls for it.`
-    )
+    // ── App Context (compact) ──
+    systemParts.push('\n' + COMPACT_APP_CONTEXT)
 
     if (octoContent.role) systemParts.push(`\nYour role: ${octoContent.role}`)
     systemParts.push(`Your name: ${octoContent.name || 'assistant'}`)
@@ -1488,27 +1470,12 @@ How your world works:
           : []
         const pageList =
           wikiFiles.length > 0 ? wikiFiles.join(', ') : '(none yet)'
-        systemParts.push(
-          `\nWorkspace wiki — shared notes the whole team (you, your peers, and the user) can read and write:
-- Wiki directory (absolute path): ${wikiDir}
-- Existing pages: ${pageList}
-- The wiki is shared across all folders in this workspace.
-- To READ a page: use the Read tool with the absolute path, e.g. Read "${wikiDir}/<page>.md".
-- To LIST pages: use Glob with "${wikiDir}/*.md".
-- To WRITE or UPDATE a page: use Write/Edit with the absolute path under this directory. Only .md files, flat (no subfolders).
-- Check the wiki at the start of non-trivial tasks to pick up team context, decisions, and goals. Update it when you learn something durable the team should remember.`
-        )
+        systemParts.push(compactWikiSection(wikiDir, pageList))
       }
     } catch {}
     // Tell the agent about its peers so it can @mention them
     if (peers && peers.length > 0) {
-      systemParts.push('\nYou are in a group chat with these other agents:')
-      peers.forEach((p) => {
-        systemParts.push(`- @${p.name}: ${p.role || 'assistant'}`)
-      })
-      systemParts.push(
-        '\nIf another agent\'s expertise would help answer this, you can mention them with @name in your response. They will automatically see your message and may respond. Only mention peers when it genuinely adds value — do not mention them just to be polite.'
-      )
+      systemParts.push(compactPeerSection(peers))
     }
 
     // Collaboration leader mode — assigned by the dispatcher
@@ -1530,14 +1497,11 @@ How to collaborate (very important):
 6. NEVER assume a teammate has already done something. You are first. Whatever needs doing right now, you do.`
       )
     }
-    // Include recent history so the agent remembers prior turns
+    // Include recent history — compressed to save tokens.
+    // Old messages are summarised; only the last 4 are kept verbatim (truncated).
     if (octoContent.history && octoContent.history.length > 0) {
-      const recent = octoContent.history.slice(-10)
-      systemParts.push('\nRecent conversation:')
-      for (const msg of recent) {
-        const who = msg.role === 'user' ? 'User' : 'Assistant'
-        systemParts.push(`${who}: ${msg.text}`)
-      }
+      const compressed = compressHistory(octoContent.history.slice(-10))
+      systemParts.push(formatCompressedHistory(compressed))
     }
 
     // Decide whether the agent should be able to use tools.
@@ -2043,6 +2007,12 @@ ipcMain.handle('fileAccess:notifyBlocked', (_event, params: {
 })
 
 // ── Settings persistence ─────────────────────
+interface TextShortcut {
+  trigger: string
+  expansion: string
+  description?: string
+}
+
 interface AppSettings {
   general: {
     restoreLastWorkspace: boolean
@@ -2058,6 +2028,9 @@ interface AppSettings {
   }
   appearance: {
     chatFontSize: number // 13-18
+  }
+  shortcuts: {
+    textExpansions: TextShortcut[]
   }
 }
 
@@ -2079,6 +2052,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   appearance: {
     chatFontSize: 14,
   },
+  shortcuts: {
+    textExpansions: [],
+  },
 }
 
 function loadSettings(): AppSettings {
@@ -2094,6 +2070,11 @@ function loadSettings(): AppSettings {
           },
         },
         appearance: { ...DEFAULT_SETTINGS.appearance, ...raw.appearance },
+        shortcuts: {
+          ...DEFAULT_SETTINGS.shortcuts,
+          ...raw.shortcuts,
+          textExpansions: raw.shortcuts?.textExpansions || [],
+        },
       }
     }
   } catch {}

@@ -45,6 +45,12 @@ interface HistoryMessage {
   ts: number
 }
 
+interface TextShortcut {
+  trigger: string
+  expansion: string
+  description?: string
+}
+
 interface AppSettings {
   general: {
     restoreLastWorkspace: boolean
@@ -60,6 +66,9 @@ interface AppSettings {
   }
   appearance: {
     chatFontSize: number
+  }
+  shortcuts: {
+    textExpansions: TextShortcut[]
   }
 }
 

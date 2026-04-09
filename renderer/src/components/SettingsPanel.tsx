@@ -9,6 +9,9 @@ import {
   ExternalLink,
   RotateCw,
   Globe,
+  Plus,
+  Trash2,
+  Zap,
 } from 'lucide-react'
 
 type SettingsTab = 'general' | 'agents' | 'appearance' | 'shortcuts' | 'about'
@@ -18,12 +21,19 @@ const LANGUAGES = [
   { code: 'ko', label: '한국어' },
 ]
 
-export function SettingsPanel() {
+interface SettingsPanelProps {
+  onSettingsSaved?: (settings: AppSettings) => void
+}
+
+export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
   const { t, i18n } = useTranslation()
   const [tab, setTab] = useState<SettingsTab>('general')
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [newTrigger, setNewTrigger] = useState('')
+  const [newExpansion, setNewExpansion] = useState('')
+  const [shortcutError, setShortcutError] = useState<string | null>(null)
   const [versionInfo, setVersionInfo] = useState<{
     version: string
     electron: string
@@ -91,6 +101,38 @@ export function SettingsPanel() {
     await window.api.saveSettings(updated)
   }
 
+  const addTextShortcut = () => {
+    if (!settings) return
+    const trigger = newTrigger.trim()
+    const expansion = newExpansion.trim()
+
+    // Validate
+    if (!trigger) { setShortcutError(t('settings.shortcuts.triggerEmpty')); return }
+    if (!trigger.startsWith('/')) { setShortcutError(t('settings.shortcuts.triggerPrefix')); return }
+    if (trigger.length < 2) { setShortcutError(t('settings.shortcuts.triggerMinLength')); return }
+    if (/\s/.test(trigger)) { setShortcutError(t('settings.shortcuts.triggerNoSpaces')); return }
+    if (!expansion) { setShortcutError(t('settings.shortcuts.expansionEmpty')); return }
+
+    const existing = settings.shortcuts?.textExpansions || []
+    if (existing.some((s) => s.trigger.toLowerCase() === trigger.toLowerCase())) {
+      setShortcutError(t('settings.shortcuts.triggerDuplicate'))
+      return
+    }
+
+    const updated = {
+      ...settings,
+      shortcuts: {
+        ...settings.shortcuts,
+        textExpansions: [...existing, { trigger, expansion }],
+      },
+    }
+    setSettings(updated)
+    setDirty(true)
+    setNewTrigger('')
+    setNewExpansion('')
+    setShortcutError(null)
+  }
+
   const save = async () => {
     if (!settings || !dirty) return
     setSaving(true)
@@ -104,6 +146,7 @@ export function SettingsPanel() {
 
     setSaving(false)
     setDirty(false)
+    onSettingsSaved?.(settings)
   }
 
   if (!settings) {
@@ -299,11 +342,8 @@ export function SettingsPanel() {
 
         {tab === 'shortcuts' && (
           <div className="settings-section">
-            <h3 className="settings-section-title">{t('settings.shortcuts.title')}</h3>
-            <p className="settings-section-desc">
-              {t('settings.shortcuts.comingSoon')}
-            </p>
-
+            {/* Keyboard Shortcuts (read-only) */}
+            <h3 className="settings-section-title">{t('settings.shortcuts.keyboardTitle')}</h3>
             <div className="settings-shortcut-list">
               {SHORTCUTS.map((s) => (
                 <div key={s.label} className="settings-shortcut-row">
@@ -315,6 +355,91 @@ export function SettingsPanel() {
                   </span>
                 </div>
               ))}
+            </div>
+
+            {/* Text Shortcuts (CRUD) */}
+            <h3 className="settings-section-title" style={{ marginTop: 24 }}>
+              <Zap size={16} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+              {t('settings.shortcuts.textExpansionsTitle')}
+            </h3>
+            <p className="settings-section-desc">
+              {t('settings.shortcuts.textExpansionsDesc')}
+            </p>
+
+            {/* Existing shortcuts list */}
+            {(settings.shortcuts?.textExpansions || []).length === 0 ? (
+              <p className="settings-section-desc" style={{ fontStyle: 'italic', opacity: 0.6 }}>
+                {t('settings.shortcuts.noShortcuts')}
+              </p>
+            ) : (
+              <div className="text-shortcut-list">
+                {(settings.shortcuts?.textExpansions || []).map((sc, idx) => (
+                  <div key={idx} className="text-shortcut-row">
+                    <div className="text-shortcut-trigger">
+                      <kbd>{sc.trigger}</kbd>
+                    </div>
+                    <div className="text-shortcut-arrow">→</div>
+                    <div className="text-shortcut-expansion">{sc.expansion}</div>
+                    {sc.description && (
+                      <div className="text-shortcut-desc">{sc.description}</div>
+                    )}
+                    <button
+                      className="text-shortcut-delete"
+                      title={t('common.delete')}
+                      onClick={() => {
+                        if (!confirm(t('settings.shortcuts.deleteConfirm', { trigger: sc.trigger }))) return
+                        const updated = {
+                          ...settings,
+                          shortcuts: {
+                            ...settings.shortcuts,
+                            textExpansions: (settings.shortcuts?.textExpansions || []).filter((_, i) => i !== idx),
+                          },
+                        }
+                        setSettings(updated)
+                        setDirty(true)
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new shortcut form */}
+            <div className="text-shortcut-add">
+              <div className="text-shortcut-add-row">
+                <input
+                  className="text-shortcut-input trigger-input"
+                  placeholder={t('settings.shortcuts.triggerPlaceholder')}
+                  value={newTrigger}
+                  onChange={(e) => {
+                    setNewTrigger(e.target.value)
+                    setShortcutError(null)
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addTextShortcut() }}
+                />
+                <input
+                  className="text-shortcut-input expansion-input"
+                  placeholder={t('settings.shortcuts.expansionPlaceholder')}
+                  value={newExpansion}
+                  onChange={(e) => {
+                    setNewExpansion(e.target.value)
+                    setShortcutError(null)
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addTextShortcut() }}
+                />
+                <button
+                  className="text-shortcut-add-btn"
+                  onClick={addTextShortcut}
+                  title={t('settings.shortcuts.addShortcut')}
+                >
+                  <Plus size={16} />
+                </button>
+              </div>
+              {shortcutError && (
+                <div className="text-shortcut-error">{shortcutError}</div>
+              )}
             </div>
           </div>
         )}

@@ -172,6 +172,7 @@ interface ChatPanelProps {
   onToggleLeftSidebar: () => void
   onToggleRightSidebar: () => void
   onStopAll: () => void
+  shortcuts?: TextShortcut[]
 }
 
 export function ChatPanel({
@@ -199,6 +200,7 @@ export function ChatPanel({
   onToggleLeftSidebar,
   onToggleRightSidebar,
   onStopAll,
+  shortcuts = [],
 }: ChatPanelProps) {
   const { t } = useTranslation()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -212,6 +214,8 @@ export function ChatPanel({
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [showScrollDown, setShowScrollDown] = useState(false)
   const [mentionIndex, setMentionIndex] = useState(0)
+  const [shortcutHints, setShortcutHints] = useState<TextShortcut[]>([])
+  const [shortcutHintIndex, setShortcutHintIndex] = useState(0)
   const dragCounterRef = useRef(0)
   const initialScrollDoneRef = useRef<string | null>(null)
 
@@ -455,8 +459,22 @@ export function ChatPanel({
       setMentionOpen(true)
       setMentionQuery(match[1])
       setMentionIndex(0)
+      setShortcutHints([])
     } else {
       setMentionOpen(false)
+
+      // Shortcut hint: if input starts with / and has no spaces yet, show matching shortcuts
+      const trimmed = v.trimStart()
+      if (trimmed.startsWith('/') && shortcuts.length > 0) {
+        const firstWord = trimmed.split(/\s/)[0]
+        const matches = shortcuts.filter((s) =>
+          s.trigger.toLowerCase().startsWith(firstWord.toLowerCase())
+        )
+        setShortcutHints(matches.slice(0, 5))
+        setShortcutHintIndex(0)
+      } else {
+        setShortcutHints([])
+      }
     }
   }
 
@@ -495,9 +513,40 @@ export function ChatPanel({
       }
     }
 
+    // Shortcut hint navigation
+    if (shortcutHints.length > 0 && !mentionOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setShortcutHintIndex((prev) => (prev + 1) % shortcutHints.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setShortcutHintIndex((prev) => (prev - 1 + shortcutHints.length) % shortcutHints.length)
+        return
+      }
+      if (e.key === 'Tab') {
+        if (e.nativeEvent.isComposing || e.keyCode === 229) return
+        e.preventDefault()
+        // Auto-fill the trigger + space
+        const sc = shortcutHints[shortcutHintIndex]
+        const afterTrigger = input.trimStart().slice(input.trimStart().split(/\s/)[0].length)
+        setInput(sc.trigger + ' ' + afterTrigger.trimStart())
+        setShortcutHints([])
+        textareaRef.current?.focus()
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShortcutHints([])
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       e.preventDefault()
+      setShortcutHints([])
       handleSend()
     }
     if (e.key === 'Escape') setMentionOpen(false)
@@ -739,6 +788,32 @@ export function ChatPanel({
       <footer className="composer">
         {mentionOpen && filteredMentions.length > 0 && (
           <MentionPopup filteredMentions={filteredMentions} pickMention={pickMention} octos={octos} selectedIndex={mentionIndex} />
+        )}
+
+        {/* Shortcut hints popup */}
+        {shortcutHints.length > 0 && !mentionOpen && (
+          <div className="shortcut-hint-popup">
+            {shortcutHints.map((sc, idx) => (
+              <div
+                key={sc.trigger}
+                className={`shortcut-hint-item ${idx === shortcutHintIndex ? 'selected' : ''}`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  const afterTrigger = input.trimStart().slice(input.trimStart().split(/\s/)[0].length)
+                  setInput(sc.trigger + ' ' + afterTrigger.trimStart())
+                  setShortcutHints([])
+                  textareaRef.current?.focus()
+                }}
+              >
+                <kbd className="shortcut-hint-trigger">{sc.trigger}</kbd>
+                <span className="shortcut-hint-arrow">→</span>
+                <span className="shortcut-hint-expansion">{sc.expansion}</span>
+                {sc.description && (
+                  <span className="shortcut-hint-desc">{sc.description}</span>
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Attachment preview */}

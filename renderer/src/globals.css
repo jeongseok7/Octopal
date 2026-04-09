@@ -3040,6 +3040,77 @@ button {
   background: var(--bg-hover);
 }
 
+/* ── Shortcut Hint Popup ── */
+.shortcut-hint-popup {
+  position: absolute;
+  bottom: 60px;
+  left: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 260px;
+  max-width: 440px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.shortcut-hint-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.shortcut-hint-item:hover,
+.shortcut-hint-item.selected {
+  background: var(--bg-hover);
+}
+
+.shortcut-hint-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 36px;
+  height: 22px;
+  padding: 0 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--font-mono, 'SF Mono', 'Menlo', monospace);
+  white-space: nowrap;
+}
+
+.shortcut-hint-arrow {
+  color: var(--text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.shortcut-hint-expansion {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.shortcut-hint-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 /* ── Modal ── */
 .modal-backdrop {
   position: fixed;
@@ -3457,6 +3528,149 @@ button {
   font-family: inherit;
   letter-spacing: 0.02em;
   box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+}
+
+/* Text Shortcuts */
+.text-shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+}
+
+.text-shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.text-shortcut-trigger kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--font-mono, 'SF Mono', 'Menlo', monospace);
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+  white-space: nowrap;
+}
+
+.text-shortcut-arrow {
+  color: var(--text-secondary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.text-shortcut-expansion {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-shortcut-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.text-shortcut-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.text-shortcut-delete:hover {
+  color: var(--error, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.text-shortcut-add {
+  margin-top: 8px;
+}
+
+.text-shortcut-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.text-shortcut-input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.text-shortcut-input:focus {
+  border-color: var(--accent);
+}
+
+.text-shortcut-input.trigger-input {
+  width: 100px;
+  flex-shrink: 0;
+  font-family: var(--font-mono, 'SF Mono', 'Menlo', monospace);
+  font-weight: 600;
+}
+
+.text-shortcut-input.expansion-input {
+  flex: 1;
+}
+
+.text-shortcut-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.text-shortcut-add-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.text-shortcut-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--error, #ef4444);
 }
 
 /* About */

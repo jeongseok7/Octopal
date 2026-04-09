@@ -16,6 +16,7 @@ import { ClaudeLoginModal } from './components/modals/ClaudeLoginModal'
 import { FileAccessApprovalModal, type FileAccessDecision } from './components/modals/FileAccessApprovalModal'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ToastContainer, showToast } from './components/Toast'
+import { expandShortcut } from './shortcut-expander'
 
 export function App() {
   const { t, i18n } = useTranslation()
@@ -69,6 +70,9 @@ export function App() {
     userTs: number
   }>>(new Map())
 
+  // Text shortcuts for token-saving expansions (loaded from settings)
+  const shortcutsRef = useRef<TextShortcut[]>([])
+
   // Debounce buffer: collect consecutive user messages before triggering agents
   const DEBOUNCE_MS = 1200
   const bufferRef = useRef<{
@@ -93,6 +97,7 @@ export function App() {
       if (settings.general.language && settings.general.language !== i18n.language) {
         i18n.changeLanguage(settings.general.language)
       }
+      shortcutsRef.current = settings.shortcuts?.textExpansions || []
     })
     window.api.loadState().then(async (s) => {
       if (s.workspaces.length === 0) {
@@ -540,7 +545,16 @@ export function App() {
     const hasText = input.trim().length > 0
     const hasAttachments = attachments && attachments.length > 0
     if ((!hasText && !hasAttachments) || !activeFolder) return
-    const text = input.trim()
+
+    // Expand text shortcuts before sending — saves tokens & enables Layer 0 routing
+    let text = input.trim()
+    if (shortcutsRef.current.length > 0) {
+      const match = expandShortcut(text, shortcutsRef.current)
+      if (match) {
+        text = match.expandedText
+      }
+    }
+
     setInput('')
     setMentionOpen(false)
 
@@ -738,7 +752,9 @@ export function App() {
     invokeAgent(leader, combinedText, userTs, 0, called, collaborators, allAttachments)
   }
 
-  const MAX_CHAIN_DEPTH = 3
+  // No hard depth limit — the alreadyCalled set prevents cycles naturally.
+  // Safety cap only to guard against truly pathological edge cases.
+  const MAX_CHAIN_DEPTH = 50
   const invokeAgent = async (
     target: OctoFile,
     prompt: string,
@@ -1162,11 +1178,14 @@ export function App() {
                 return next
               })
             }}
+            shortcuts={shortcutsRef.current}
           />
         ) : centerTab === 'activity' ? (
           <ActivityPanel activityLog={folderActivity} octos={octos} folderMessages={folderMessages} />
         ) : centerTab === 'settings' ? (
-          <SettingsPanel />
+          <SettingsPanel onSettingsSaved={(s) => {
+            shortcutsRef.current = s.shortcuts?.textExpansions || []
+          }} />
         ) : state.activeWorkspaceId ? (
           <WikiPanel workspaceId={state.activeWorkspaceId} />
         ) : null}
