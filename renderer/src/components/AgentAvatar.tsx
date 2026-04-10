@@ -32,7 +32,7 @@ export function AgentAvatar({ name, icon, color, size = 'md', showOnlineDot = fa
       {hasEmoji ? (
         <span className="avatar-emoji-char">{icon}</span>
       ) : (
-        name[0].toUpperCase()
+        (name?.[0] ?? '?').toUpperCase()
       )}
       {showOnlineDot && <span className={dotClass} />}
     </div>
