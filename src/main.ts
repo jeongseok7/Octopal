@@ -1348,10 +1348,10 @@ Rules for collaborators:
 - Collaborators can be mentioned by the leader using @name during their response; they will then be invoked automatically.
 
 Also decide the appropriate model tier for the responding agent:
-- "haiku": simple tasks — greetings, short answers, formatting, translations, simple Q&A, quick lookups
-- "sonnet": moderate tasks — code implementation, debugging, multi-step analysis, refactoring, test writing
-- "opus": complex tasks — architecture design, security audit, complex debugging across multiple files, nuanced reasoning
-Default to "opus" unless the task is clearly simple.
+- "haiku": trivial tasks — one-line greetings, simple yes/no answers, very short translations, pure formatting with no thinking required
+- "sonnet": light conversational tasks — explaining a single concept briefly, simple factual Q&A with minimal analysis
+- "opus": everything else — any task involving code, commands, file operations, debugging, implementation, multi-step reasoning, planning, architecture, or anything that requires careful thought
+Default to "opus" for virtually all tasks. Only use "haiku" for the most trivial one-liners, and "sonnet" sparingly for light conversation.
 
 Never include agents not in the list. The leader field is required.`
 
