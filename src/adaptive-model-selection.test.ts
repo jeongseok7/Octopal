@@ -25,7 +25,7 @@ function parseDispatcherModel(parsed: any): string {
   const allowedModels = ['haiku', 'sonnet', 'opus']
   const model = typeof parsed.model === 'string' && allowedModels.includes(parsed.model)
     ? parsed.model as 'sonnet' | 'opus'
-    : 'sonnet'
+    : 'opus'
   return model
 }
 
@@ -64,8 +64,8 @@ function applyObserverModelSetting(observer: SmartObserver, settings: {
 
 // ── Default settings shape (mirrors main.ts DEFAULT_SETTINGS.advanced) ──
 const DEFAULT_ADVANCED = {
-  observerModel: 'haiku' as const,
-  defaultAgentModel: 'haiku' as const,
+  observerModel: 'opus' as const,
+  defaultAgentModel: 'opus' as const,
   autoModelSelection: true,
 }
 
@@ -78,9 +78,9 @@ describe('Adaptive Model Selection', () => {
   // ── 1. SmartObserver DEFAULT_CLI_MODEL ─────────────────────
 
   describe('SmartObserver default model', () => {
-    it('uses haiku as default CLI model', () => {
+    it('uses opus as default CLI model', () => {
       const so = new SmartObserver(new ConversationObserver())
-      expect(so.model).toBe('haiku')
+      expect(so.model).toBe('opus')
     })
 
     it('model getter/setter works correctly', () => {
@@ -105,12 +105,12 @@ describe('Adaptive Model Selection', () => {
   // ── 2. Default settings values ────────────────────────────
 
   describe('default settings', () => {
-    it('observerModel defaults to haiku', () => {
-      expect(DEFAULT_ADVANCED.observerModel).toBe('haiku')
+    it('observerModel defaults to opus', () => {
+      expect(DEFAULT_ADVANCED.observerModel).toBe('opus')
     })
 
-    it('defaultAgentModel defaults to haiku', () => {
-      expect(DEFAULT_ADVANCED.defaultAgentModel).toBe('haiku')
+    it('defaultAgentModel defaults to opus', () => {
+      expect(DEFAULT_ADVANCED.defaultAgentModel).toBe('opus')
     })
 
     it('autoModelSelection defaults to true', () => {
@@ -133,23 +133,23 @@ describe('Adaptive Model Selection', () => {
       expect(parseDispatcherModel({ leader: 'developer', model: 'opus' })).toBe('opus')
     })
 
-    it('falls back to sonnet for missing model field', () => {
-      expect(parseDispatcherModel({ leader: 'developer' })).toBe('sonnet')
+    it('falls back to opus for missing model field', () => {
+      expect(parseDispatcherModel({ leader: 'developer' })).toBe('opus')
     })
 
-    it('falls back to sonnet for invalid model string', () => {
-      expect(parseDispatcherModel({ leader: 'developer', model: 'gpt-4' })).toBe('sonnet')
+    it('falls back to opus for invalid model string', () => {
+      expect(parseDispatcherModel({ leader: 'developer', model: 'gpt-4' })).toBe('opus')
     })
 
-    it('falls back to sonnet for non-string model', () => {
-      expect(parseDispatcherModel({ leader: 'developer', model: 42 })).toBe('sonnet')
-      expect(parseDispatcherModel({ leader: 'developer', model: null })).toBe('sonnet')
-      expect(parseDispatcherModel({ leader: 'developer', model: true })).toBe('sonnet')
+    it('falls back to opus for non-string model', () => {
+      expect(parseDispatcherModel({ leader: 'developer', model: 42 })).toBe('opus')
+      expect(parseDispatcherModel({ leader: 'developer', model: null })).toBe('opus')
+      expect(parseDispatcherModel({ leader: 'developer', model: true })).toBe('opus')
     })
 
     it('is case-sensitive (uppercase rejected)', () => {
-      expect(parseDispatcherModel({ leader: 'developer', model: 'Haiku' })).toBe('sonnet')
-      expect(parseDispatcherModel({ leader: 'developer', model: 'SONNET' })).toBe('sonnet')
+      expect(parseDispatcherModel({ leader: 'developer', model: 'Haiku' })).toBe('opus')
+      expect(parseDispatcherModel({ leader: 'developer', model: 'SONNET' })).toBe('opus')
     })
   })
 
@@ -346,13 +346,13 @@ describe('Adaptive Model Selection', () => {
       expect(resolved).toBe('sonnet') // fixed setting wins
     })
 
-    it('model selection chain: no dispatcher model → auto mode → null', () => {
+    it('model selection chain: no dispatcher model → auto mode → opus fallback', () => {
       // Dispatcher returns legacy format without model field
       const dispatcherOutput = { leader: 'developer', collaborators: [] }
-      const model = parseDispatcherModel(dispatcherOutput) // falls back to sonnet
+      const model = parseDispatcherModel(dispatcherOutput) // falls back to opus
       const settings = { advanced: { ...DEFAULT_ADVANCED } }
       const resolved = resolveAgentModel(settings, model)
-      expect(resolved).toBe('sonnet')
+      expect(resolved).toBe('opus')
     })
 
     it('observer model independent of agent model', () => {

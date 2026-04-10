@@ -42,6 +42,7 @@ export interface Message {
   handoff?: PendingHandoff    // set when this agent's message proposes calling others
   permissionRequest?: PermissionRequest  // set when agent needs permissions to fulfill user's request
   usage?: TokenUsage          // token usage for this agent response
+  dispatcherAgents?: string[] // agent names shown in routing indicator (slot-machine effect)
 }
 
 export interface ActivityLogEntry {

@@ -1155,7 +1155,7 @@ When in doubt between handoff and approval, prefer "approval" — the human can 
   try {
     const claudeArgs = [
       '-p', '--print',
-      '--model', 'haiku',
+      '--model', 'opus',
       '--mcp-config', '{"mcpServers":{}}',
       '--strict-mcp-config',
       '--system-prompt', systemPrompt,
@@ -1294,19 +1294,10 @@ ipcMain.handle('dispatcher:route', async (_event, params: {
     ? observer.getContext(params.folderPath)
     : observer.getContext('__default__')
 
-  // Extract @mentions from the message
-  const mentionPattern = /@(\w+)/g
-  const mentions: string[] = []
-  let mentionMatch: RegExpExecArray | null
-  while ((mentionMatch = mentionPattern.exec(message)) !== null) {
-    mentions.push(mentionMatch[1])
-  }
-
   const ruleResult = ruleRouter.evaluate({
     message,
     agents,
     observerContext: observerCtx,
-    mentionedAgents: mentions,
   })
 
   if (ruleResult.confidence >= CONFIDENCE_THRESHOLD && ruleResult.leader) {
@@ -1360,7 +1351,7 @@ Also decide the appropriate model tier for the responding agent:
 - "haiku": simple tasks — greetings, short answers, formatting, translations, simple Q&A, quick lookups
 - "sonnet": moderate tasks — code implementation, debugging, multi-step analysis, refactoring, test writing
 - "opus": complex tasks — architecture design, security audit, complex debugging across multiple files, nuanced reasoning
-Default to "haiku" unless the task clearly needs more capability.
+Default to "opus" unless the task is clearly simple.
 
 Never include agents not in the list. The leader field is required.`
 
@@ -1368,7 +1359,7 @@ Never include agents not in the list. The leader field is required.`
     const claudeArgs = [
       '-p',
       '--print',
-      '--model', 'haiku',
+      '--model', 'opus',
       '--mcp-config',
       '{"mcpServers":{}}',
       '--strict-mcp-config',
@@ -1424,7 +1415,7 @@ Never include agents not in the list. The leader field is required.`
             const allowedModels = ['haiku', 'sonnet', 'opus']
             const model = typeof parsed.model === 'string' && allowedModels.includes(parsed.model)
               ? parsed.model as 'sonnet' | 'opus'
-              : 'sonnet'
+              : 'opus'
             return { ok: true, leader, collaborators, model }
           }
         }
@@ -1879,7 +1870,7 @@ Reply with ONLY a JSON object, nothing else:
     const claudeArgs = [
       '-p',
       '--print',
-      '--model', 'haiku',
+      '--model', 'opus',
       '--mcp-config',
       '{"mcpServers":{}}',
       '--strict-mcp-config',
@@ -2137,8 +2128,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     textExpansions: [],
   },
   advanced: {
-    observerModel: 'haiku',
-    defaultAgentModel: 'haiku',
+    observerModel: 'opus',
+    defaultAgentModel: 'opus',
     autoModelSelection: true,
   },
 }

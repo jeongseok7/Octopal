@@ -720,6 +720,7 @@ export function App() {
               text: t('chat.routing'),
               ts: Date.now(),
               pending: true,
+              dispatcherAgents: visibleAgents.map((r) => r.name),
             },
           ],
         }))

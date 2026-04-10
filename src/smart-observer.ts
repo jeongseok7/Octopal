@@ -104,7 +104,7 @@ const CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000
 /** Base backoff duration (ms) for exponential backoff */
 const BACKOFF_BASE_MS = 30_000
 /** Default model for CLI calls */
-const DEFAULT_CLI_MODEL = 'haiku'
+const DEFAULT_CLI_MODEL = 'opus'
 /** Required fields that must be non-empty strings for valid LLM output */
 const REQUIRED_LLM_FIELDS: (keyof LLMContext)[] = [
   'conversationSummary', 'currentTopic', 'conversationPhase', 'userIntent',

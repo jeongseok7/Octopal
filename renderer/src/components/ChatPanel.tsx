@@ -150,6 +150,39 @@ function TokenUsageBadge({ usage }: { usage: TokenUsage }) {
   )
 }
 
+/**
+ * DispatcherSlotMachine — rotating agent avatars during routing.
+ * Shows candidate agents cycling through like a slot machine while
+ * the LLM router decides who should respond.
+ */
+function DispatcherSlotMachine({ agents, octos }: { agents: string[]; octos: OctoFile[] }) {
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  useEffect(() => {
+    if (agents.length <= 1) return
+    const interval = setInterval(() => {
+      setActiveIdx((prev) => (prev + 1) % agents.length)
+    }, 600)
+    return () => clearInterval(interval)
+  }, [agents.length])
+
+  return (
+    <div className="dispatcher-slot">
+      {agents.map((name, i) => {
+        const octo = octos.find((o) => o.name === name)
+        return (
+          <div
+            key={name}
+            className={`dispatcher-slot-item ${i === activeIdx ? 'active' : ''}`}
+          >
+            <AgentAvatar name={name} icon={octo?.icon} size="xs" />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 interface ChatPanelProps {
   activeFolder: string | null
   activeWorkspace: Workspace | null
@@ -643,9 +676,14 @@ export function ChatPanel({
           const isDispatcher = m.agentName === '__dispatcher__'
           const isSystem = m.agentName === '__system__'
           if (isDispatcher) {
+            const candidates = m.dispatcherAgents || []
             return (
               <div key={m.id} className="dispatcher-indicator">
-                <span className="dispatcher-dot" />
+                {candidates.length > 0 ? (
+                  <DispatcherSlotMachine agents={candidates} octos={octos} />
+                ) : (
+                  <span className="dispatcher-dot" />
+                )}
                 {t('chat.routing')}
               </div>
             )
