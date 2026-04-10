@@ -1,14 +1,14 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { basename } from '../utils'
-import { Plus, FolderOpen, ChevronDown, X, BookOpen, Activity, Settings, PanelLeftClose } from 'lucide-react'
+import { Plus, FolderOpen, ChevronDown, X, BookOpen, Activity, Settings, PanelLeftClose, GitCommit } from 'lucide-react'
 
 interface LeftSidebarProps {
   activeWorkspace: Workspace | null
   state: AppState
   activeFolder: string | null
-  centerTab: 'chat' | 'wiki' | 'activity' | 'settings'
-  setCenterTab: (tab: 'chat' | 'wiki' | 'activity' | 'settings') => void
+  centerTab: 'chat' | 'wiki' | 'activity' | 'timeline' | 'settings'
+  setCenterTab: (tab: 'chat' | 'wiki' | 'activity' | 'timeline' | 'settings') => void
   activityCount: number
   workspaceMenuOpen: boolean
   setWorkspaceMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void
@@ -149,6 +149,23 @@ export function LeftSidebar({
           {activityCount > 0 && (
             <span className="sidebar-nav-badge">{activityCount}</span>
           )}
+        </button>
+        <button
+          className={`sidebar-nav-item ${centerTab === 'timeline' ? 'active' : ''}`}
+          onClick={() => {
+            if (centerTab === 'timeline') {
+              if (!activeFolder && folders.length > 0) {
+                setActiveFolder(folders[0])
+              }
+              setCenterTab('chat')
+            } else {
+              setCenterTab('timeline')
+            }
+          }}
+          disabled={!state.activeWorkspaceId}
+        >
+          <GitCommit size={16} />
+          <span>{t('sidebar.timeline')}</span>
         </button>
       </div>
       <div className="project-list">
