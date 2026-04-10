@@ -297,16 +297,18 @@ pub async fn send_message(
         "stream-json".to_string(),
     ];
 
-    // MCP config
-    let mcp_servers = octo_content.get("mcpServers");
-    if let Some(mcp) = mcp_servers {
+    // MCP config — always include, even if empty (matches Electron behavior)
+    let mcp_config = if let Some(mcp) = octo_content.get("mcpServers") {
         if mcp.is_object() && !mcp.as_object().unwrap().is_empty() {
-            let mcp_config = serde_json::json!({ "mcpServers": mcp });
-            claude_args.push("--mcp-config".to_string());
-            claude_args.push(mcp_config.to_string());
-            claude_args.push("--strict-mcp-config".to_string());
+            serde_json::json!({ "mcpServers": mcp })
+        } else {
+            serde_json::json!({ "mcpServers": {} })
         }
-    }
+    } else {
+        serde_json::json!({ "mcpServers": {} })
+    };
+    claude_args.push("--mcp-config".to_string());
+    claude_args.push(mcp_config.to_string());
 
     // Model — extract settings values in a block to avoid holding MutexGuard across await
     {
@@ -427,10 +429,26 @@ pub async fn send_message(
             .args(&claude_args)
             .current_dir(&folder_clone)
             .stdout(Stdio::piped())
-            .stderr(Stdio::null()) // Don't pipe stderr — prevents deadlock when buffer fills
+            .stderr(Stdio::piped()) // Capture stderr to diagnose errors
             .stdin(Stdio::null())
             .spawn()
             .map_err(|e| format!("Failed to spawn claude ({}): {}", claude_bin, e))?;
+
+        // Read stderr in a separate thread to avoid deadlock
+        let stderr = child.stderr.take().unwrap();
+        let stderr_handle = std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            let mut stderr_output = String::new();
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    if stderr_output.len() < 8192 {
+                        stderr_output.push_str(&l);
+                        stderr_output.push('\n');
+                    }
+                }
+            }
+            stderr_output
+        });
 
         // Store PID so stop_agent can kill it
         let pid = child.id();
@@ -625,6 +643,9 @@ pub async fn send_message(
 
         let status = child.wait().map_err(|e| e.to_string())?;
 
+        // Collect stderr output
+        let stderr_output = stderr_handle.join().unwrap_or_default();
+
         // Clean up: remove from running agents
         state_agents.lock().unwrap().remove(&run_id_clone);
 
@@ -632,7 +653,16 @@ pub async fn send_message(
         let was_interrupted = state_interrupted.lock().unwrap().remove(&run_id_clone);
 
         if !status.success() && !was_interrupted {
-            return Err(format!("claude exited with code {:?}", status.code()));
+            let mut err = format!("claude exited with code {:?}", status.code());
+            if !stderr_output.is_empty() {
+                err.push_str(&format!("\nstderr: {}", stderr_output.trim()));
+            }
+            return Err(err);
+        }
+
+        // If result is empty but there's stderr, include it for debugging
+        if final_result.trim().is_empty() && !stderr_output.is_empty() {
+            eprintln!("[octopal] claude stderr: {}", stderr_output.trim());
         }
 
         Ok::<String, String>(final_result.trim().to_string())
