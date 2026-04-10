@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgentAvatar } from './AgentAvatar'
-import { GitCommit, RotateCcw, ChevronDown, ChevronRight, Plus, Minus, Upload, FileText } from 'lucide-react'
+import { ConfirmModal } from './ConfirmModal'
+import { GitCommit, RotateCcw, ChevronDown, ChevronRight, Plus, Minus, Upload, FileText, Loader2 } from 'lucide-react'
 
 interface CommitEntry {
   hash: string
@@ -71,6 +72,11 @@ export function TimelinePanel({ activeFolder, octos }: TimelinePanelProps) {
   const [hasRemote, setHasRemote] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    message: string
+    commit: CommitEntry
+    index: number
+  } | null>(null)
 
   const loadHistory = useCallback(async (p: number, append = false) => {
     if (!activeFolder) return
@@ -131,18 +137,23 @@ export function TimelinePanel({ activeFolder, octos }: TimelinePanelProps) {
     }
   }
 
-  const handleRevert = async (commit: CommitEntry, index: number) => {
+  const handleRevert = (commit: CommitEntry, index: number) => {
     if (!activeFolder) return
     const isLatest = index === 0
     const msg = isLatest
       ? t('timeline.revertSingle')
       : t('timeline.revertConfirm', { count: index })
-    if (!confirm(msg)) return
+    setConfirmState({ message: msg, commit, index })
+  }
 
+  const executeRevert = async () => {
+    if (!confirmState || !activeFolder) return
+    const { commit, index } = confirmState
+    setConfirmState(null)
     setRevertingHash(commit.hash)
     try {
       let result: any
-      if (isLatest || index === 0) {
+      if (index === 0) {
         result = await window.api.gitRevert({ folderPath: activeFolder, hash: commit.hash })
       } else {
         // Revert range: from latest to this commit (inclusive)
@@ -206,6 +217,19 @@ export function TimelinePanel({ activeFolder, octos }: TimelinePanelProps) {
 
   return (
     <div className="timeline-panel">
+      {/* Confirm Modal */}
+      {confirmState && (
+        <ConfirmModal
+          title={t('timeline.revert')}
+          message={confirmState.message}
+          confirmLabel={t('timeline.revert')}
+          cancelLabel={t('common.cancel')}
+          variant="danger"
+          onConfirm={executeRevert}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="timeline-panel-header drag">
         <div className="timeline-panel-header-left">
@@ -220,7 +244,7 @@ export function TimelinePanel({ activeFolder, octos }: TimelinePanelProps) {
             title={t('timeline.push')}
           >
             <Upload size={14} />
-            {pushing ? '...' : 'Push'}
+            {pushing ? <Loader2 size={12} className="spin" /> : t('timeline.pushLabel')}
           </button>
         )}
       </div>
@@ -301,9 +325,11 @@ export function TimelinePanel({ activeFolder, octos }: TimelinePanelProps) {
                     {isExpanded && (
                       <div className="timeline-diff-viewer">
                         {diffLoading ? (
-                          <div className="timeline-diff-loading">...</div>
+                          <div className="timeline-diff-loading">
+                            <Loader2 size={14} className="spin" />
+                          </div>
                         ) : diffEntries.length === 0 ? (
-                          <div className="timeline-diff-empty">No changes</div>
+                          <div className="timeline-diff-empty">{t('timeline.noChanges')}</div>
                         ) : (
                           diffEntries.map((entry) => (
                             <div key={entry.file} className="timeline-diff-file">
@@ -329,7 +355,17 @@ export function TimelinePanel({ activeFolder, octos }: TimelinePanelProps) {
                                   entry.patch
                                     .split('\n')
                                     .slice(0, 50) // limit visible lines
-                                    .join('\n')
+                                    .map((line, i) => {
+                                      const cls = line.startsWith('+') ? 'diff-add'
+                                        : line.startsWith('-') ? 'diff-del'
+                                        : undefined
+                                      return (
+                                        <span key={i} className={cls}>
+                                          {line}
+                                          {'\n'}
+                                        </span>
+                                      )
+                                    })
                                 }</pre>
                               )}
                             </div>
