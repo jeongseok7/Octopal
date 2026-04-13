@@ -107,6 +107,25 @@ Octopal은 클로드 코드 위에서 작동하는 AI 에이전트 팀 워크스
 
 ## 사전 준비
 
+소스에서 Octopal을 빌드하려면 두 가지가 필요합니다.
+
+### 1. Rust 툴체인 (Tauri 백엔드 빌드용)
+
+Octopal은 Tauri 앱이므로 `cargo`가 `PATH`에 등록되어 있어야 합니다.
+
+```bash
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+> Windows는 [`rustup-init.exe`](https://rustup.rs)를 다운로드해 실행하세요.
+> 플랫폼별 추가 의존성은 [Tauri 사전 요구사항 가이드](https://tauri.app/start/prerequisites/)를
+> 참고하세요 (macOS: Xcode Command Line Tools, Windows: WebView2 + MSVC,
+> Linux: `webkit2gtk`).
+
+### 2. Claude CLI (AI 에이전트 통신용)
+
 Octopal을 사용하려면 **Claude CLI**가 설치되어 있고 로그인되어 있어야 합니다.
 
 ```bash

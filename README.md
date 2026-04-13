@@ -107,7 +107,27 @@ No complex setup, no cloud — just your computer and your AI agents.
 
 ## Prerequisites
 
-Octopal requires **Claude CLI** to be installed and logged in on your machine.
+To build Octopal from source you need two things on your machine:
+
+### 1. Rust toolchain (for the Tauri backend)
+
+Octopal is a Tauri app, so `cargo` must be available on your `PATH`.
+
+```bash
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+> On Windows, download and run [`rustup-init.exe`](https://rustup.rs) instead.
+> You may also need platform-specific dependencies listed in the
+> [Tauri prerequisites guide](https://tauri.app/start/prerequisites/)
+> (Xcode Command Line Tools on macOS, WebView2 + MSVC on Windows,
+> `webkit2gtk` on Linux).
+
+### 2. Claude CLI (for the AI agent)
+
+Octopal requires **Claude CLI** to be installed and logged in.
 
 ```bash
 # 1. Install Claude CLI
