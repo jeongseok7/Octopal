@@ -453,6 +453,28 @@ pub fn list_octos(
     let mut seen = std::collections::HashSet::new();
     octos.retain(|o| seen.insert(o.name.to_lowercase()));
 
+    // If no agents found at all, create a default "assistant" agent
+    if octos.is_empty() {
+        let result = crate::commands::octo::create_octo(
+            folder_path.clone(),
+            "assistant".to_string(),
+            "General assistant. Scans the project, answers questions, and helps with tasks.".to_string(),
+            None,
+            Some("🐙".to_string()),
+            None,
+            None,
+            None,
+        );
+        if result.ok {
+            if let Some(ref path) = result.path {
+                let config_path = Path::new(path);
+                if let Some(octo) = parse_agent_config(config_path) {
+                    octos.push(octo);
+                }
+            }
+        }
+    }
+
     octos.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     Ok(octos)
 }
