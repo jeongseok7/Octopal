@@ -1,22 +1,20 @@
 //! Message dispatching — routes a user message to the most appropriate
 //! agent based on role + recent history.
 //!
-//! Used to be called "observer.rs" with a pile of stubs for a never-built
-//! state-tracking system (rule observer + smart observer + classify_mention
-//! + dispatcher_check_context). All of those have been removed — they were
-//! pure no-ops that gave the illusion of conversation awareness. What lives
-//! here now is just the one function that is actually wired up:
-//! `dispatcher_route`.
+//! Uses a persistent Claude CLI process (haiku) to avoid spawning a new
+//! process for every routing call. The process stays alive and communicates
+//! via `--input-format stream-json` / `--output-format stream-json`.
 
-use std::io::Read;
-use std::process::Stdio;
+use std::io::BufRead;
+
+use tauri::State;
 
 use super::agent::sanitize_prompt_field;
-use super::claude_cli::claude_command;
+use super::process_pool::ProcessPool;
+use crate::state::ManagedState;
 
-/// Smart dispatcher: uses Claude CLI (haiku) to analyze the user's message
-/// and route it to the most appropriate agent based on their roles and
-/// recent conversation context.
+/// Smart dispatcher: uses a persistent Claude CLI haiku process to analyze
+/// the user's message and route it to the most appropriate agent.
 ///
 /// Falls back to @mention parsing → first agent if the LLM call fails.
 #[tauri::command]
@@ -25,6 +23,7 @@ pub async fn dispatcher_route(
     agents: Vec<serde_json::Value>,
     recent_history: Vec<serde_json::Value>,
     _folder_path: Option<String>,
+    state: State<'_, ManagedState>,
 ) -> Result<serde_json::Value, String> {
     let msg_lower = message.to_lowercase();
 
@@ -78,12 +77,7 @@ pub async fn dispatcher_route(
         .filter_map(|m| {
             let agent = m.get("agentName").and_then(|v| v.as_str())?;
             let text = m.get("text").and_then(|v| v.as_str())?;
-            // CRITICAL: use char-based slicing, NOT byte-based.
-            // `&text[..200]` panics on UTF-8 boundaries — Korean/Japanese/
-            // Chinese characters are 3+ bytes each, and `len()` returns
-            // byte length, so `text[..200]` lands mid-character ~66% of
-            // the time for CJK text. This is the bug that caused the
-            // SIGABRT crash report on 2026-04-12 10:41.
+            // CRITICAL: use char-based slicing for CJK safety.
             let truncated = if text.chars().count() > 200 {
                 let head: String = text.chars().take(200).collect();
                 format!("{}...", head)
@@ -95,14 +89,14 @@ pub async fn dispatcher_route(
         .collect::<Vec<_>>()
         .join("\n");
 
-    // ── Construct the routing prompt ──
+    // ── System prompt (static part — set once per persistent process) ──
     let system_prompt = format!(
         r#"You are a message router for a multi-agent chat system. Your ONLY job is to decide which agent should handle the user's message.
 
 Available agents:
 {}
 
-{}Reply with ONLY a JSON object, no markdown, no explanation:
+Reply with ONLY a JSON object, no markdown, no explanation:
 {{"leader": "<agent_name>", "collaborators": []}}
 
 Rules:
@@ -118,11 +112,6 @@ Rules:
 - Use conversation context to understand continuity (e.g., follow-up questions should go to the same agent)
 - "collaborators" should list agents who may need to contribute (can be empty)"#,
         agent_descriptions.join("\n"),
-        if history_summary.is_empty() {
-            String::new()
-        } else {
-            format!("Recent conversation:\n{}\n\n", history_summary)
-        },
         agent_names
             .iter()
             .map(|n| format!("\"{}\"", n))
@@ -130,56 +119,126 @@ Rules:
             .join(", ")
     );
 
-    let user_prompt = format!("Route this message: {}", message);
+    // ── User prompt includes dynamic context (history + message) ──
+    let user_prompt = if history_summary.is_empty() {
+        format!("Route this message: {}", message)
+    } else {
+        format!(
+            "Recent conversation:\n{}\n\nRoute this message: {}",
+            history_summary, message
+        )
+    };
 
-    // ── Call Claude CLI with haiku for fast routing ──
+    // ── Config hash for process pool cache invalidation ──
+    let agent_names_str = agent_names.join(",");
+    let config_hash = ProcessPool::hash_config(&[&agent_names_str]);
+
+    let pool_key = "__dispatcher__".to_string();
+    let process_pool = state.process_pool.clone();
+
+    // ── Call persistent Claude CLI haiku process ──
     let result = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
-        let mut cmd = claude_command();
-        cmd.args([
-            "-p",
-            "--print",
-            "--output-format",
-            "text",
-            "--model",
-            "haiku",
-            "--system-prompt",
-            &system_prompt,
-            &user_prompt,
-        ]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        // Try to reuse existing dispatcher process
+        let mut process = match process_pool.take(&pool_key) {
+            Some(mut existing) => {
+                if existing.config_hash != config_hash || !existing.is_alive() {
+                    eprintln!("[dispatcher] config changed or process dead, creating new");
+                    existing.kill();
+                    let args: Vec<String> = vec![
+                        "-p".into(), "--print".into(), "--verbose".into(),
+                        "--output-format".into(), "stream-json".into(),
+                        "--input-format".into(), "stream-json".into(),
+                        "--model".into(), "haiku".into(),
+                        "--no-session-persistence".into(),
+                        "--system-prompt".into(), system_prompt.clone(),
+                    ];
+                    let mut p = ProcessPool::create_process(&args, ".")?;
+                    p.config_hash = config_hash;
+                    p
+                } else {
+                    eprintln!("[dispatcher] reusing persistent process");
+                    existing
+                }
+            }
+            None => {
+                eprintln!("[dispatcher] creating new persistent process");
+                let args: Vec<String> = vec![
+                    "-p".into(), "--print".into(), "--verbose".into(),
+                    "--output-format".into(), "stream-json".into(),
+                    "--input-format".into(), "stream-json".into(),
+                    "--model".into(), "haiku".into(),
+                    "--no-session-persistence".into(),
+                    "--system-prompt".into(), system_prompt.clone(),
+                ];
+                let mut p = ProcessPool::create_process(&args, ".")?;
+                p.config_hash = config_hash;
+                p
+            }
+        };
 
-        let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn claude: {}", e))?;
+        // Send routing query via stdin
+        process.send_message(&user_prompt)
+            .map_err(|e| format!("Failed to send routing query: {}", e))?;
 
-        let stdout = child.stdout.take().ok_or("No stdout")?;
-        let mut output = String::new();
-        let mut reader = std::io::BufReader::new(stdout);
-        reader
-            .read_to_string(&mut output)
-            .map_err(|e| format!("Read error: {}", e))?;
+        // Read until result event
+        let mut final_text = String::new();
+        let mut process_died = false;
 
-        let status = child.wait().map_err(|e| format!("Wait error: {}", e))?;
-        if !status.success() {
-            return Err(format!("Claude exited with status: {}", status));
+        loop {
+            let mut line = String::new();
+            match process.reader.read_line(&mut line) {
+                Ok(0) => { process_died = true; break; }
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("[dispatcher] read error: {}", e);
+                    process_died = true;
+                    break;
+                }
+            }
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() { continue; }
+
+            let event = match serde_json::from_str::<serde_json::Value>(trimmed) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+            if event_type == "system" { continue; }
+
+            if event_type == "result" {
+                final_text = event
+                    .get("result")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                break;
+            }
         }
 
-        let trimmed = output.trim();
+        // Return process to pool if still alive
+        if !process_died && process.is_alive() {
+            process_pool.put(pool_key, process);
+        }
 
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        // Parse the routing JSON from the result
+        let text = final_text.trim();
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(text) {
             return Ok(parsed);
         }
-
-        if let Some(start) = trimmed.find('{') {
-            if let Some(end) = trimmed.rfind('}') {
+        if let Some(start) = text.find('{') {
+            if let Some(end) = text.rfind('}') {
                 if let Ok(parsed) =
-                    serde_json::from_str::<serde_json::Value>(&trimmed[start..=end])
+                    serde_json::from_str::<serde_json::Value>(&text[start..=end])
                 {
                     return Ok(parsed);
                 }
             }
         }
 
-        Err(format!("Failed to parse routing response: {}", trimmed))
+        Err(format!("Failed to parse routing response: {}", text))
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?;

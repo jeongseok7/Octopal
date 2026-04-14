@@ -9,3 +9,4 @@ pub mod dispatcher;
 pub mod backup;
 pub mod file_lock;
 pub mod claude_cli;
+pub mod process_pool;

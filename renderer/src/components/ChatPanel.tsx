@@ -4,7 +4,7 @@ import { basename } from '../utils'
 import { MentionPopup } from './MentionPopup'
 import { AgentAvatar } from './AgentAvatar'
 import type { Attachment, Message, TokenUsage } from '../types'
-import { Paperclip, Download, FileText, X, Send, Square, ImageOff, ArrowDown, PanelLeftOpen, PanelRightOpen, PanelRightClose, Code, ChevronDown, ChevronRight, Zap } from 'lucide-react'
+import { Paperclip, Download, FileText, X, Send, Square, ImageOff, ArrowDown, PanelLeftOpen, PanelRightOpen, Code, ChevronDown, ChevronRight, Zap } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { convertFileSrc } from '@tauri-apps/api/core'
 
@@ -835,13 +835,15 @@ export function ChatPanel({
               : t('chat.createWorkspaceToStart')}
           </div>
         </div>
-        <button
-          className={`sidebar-toggle-btn chat-toggle-btn${rightSidebarOpen ? ' panel-active' : ''}`}
-          onClick={onToggleRightSidebar}
-          title={rightSidebarOpen ? t('sidebar.collapseAgents') : t('sidebar.expandAgents')}
-        >
-          {rightSidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-        </button>
+        {!rightSidebarOpen && (
+          <button
+            className="sidebar-toggle-btn chat-toggle-btn"
+            onClick={onToggleRightSidebar}
+            title={t('sidebar.expandAgents')}
+          >
+            <PanelRightOpen size={16} />
+          </button>
+        )}
       </header>
 
       {/* Drag & Drop overlay */}

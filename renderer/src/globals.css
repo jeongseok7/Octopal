@@ -297,6 +297,7 @@ button {
 /* ── Scrollbar (dark theme) ── */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -427,16 +428,6 @@ button {
   background: var(--bg-active, var(--bg-hover));
   color: var(--text-primary);
   transform: scale(0.92);
-}
-
-/* Right panel toggle — active state when panel is open */
-.sidebar-toggle-btn.panel-active {
-  color: var(--accent);
-  background: var(--accent-glow);
-}
-
-.sidebar-toggle-btn.panel-active:hover {
-  background: rgba(164, 25, 37, 0.22);
 }
 
 .chat-toggle-btn {
@@ -2567,7 +2558,7 @@ button {
   border-radius: var(--radius-lg);
   padding: 10px 14px;
   max-width: 100%;
-  overflow: hidden;
+  overflow: clip;
   min-width: 0;
 }
 

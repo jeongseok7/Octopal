@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::commands::backup::BackupTracker;
 use crate::commands::file_lock::FileLockManager;
+use crate::commands::process_pool::ProcessPool;
 
 /// Persistent app state (workspaces, folders)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,6 +232,9 @@ pub struct ManagedState {
     pub backup_tracker: Arc<BackupTracker>,
     /// Best-effort file claim map used to flag concurrent-agent conflicts.
     pub file_lock_manager: Arc<FileLockManager>,
+    /// Persistent Claude CLI process pool — reuses long-running processes
+    /// to avoid macOS TCC permission popups on every spawn.
+    pub process_pool: Arc<ProcessPool>,
 }
 
 impl ManagedState {
@@ -274,6 +278,7 @@ impl ManagedState {
             is_dev,
             backup_tracker: Arc::new(BackupTracker::new()),
             file_lock_manager: Arc::new(FileLockManager::new()),
+            process_pool: Arc::new(ProcessPool::new()),
         }
     }
 

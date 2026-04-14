@@ -1,9 +1,8 @@
 use crate::state::ManagedState;
 use serde::{Serialize, Deserialize};
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::path::Path;
-use std::process::Stdio;
 use tauri::{AppHandle, Emitter, State};
 
 use super::claude_cli::claude_command;
@@ -338,32 +337,17 @@ pub async fn send_message(
     }
     } // end: !is_isolated wrapper for the handoff protocol block
 
-    // Recent conversation — shared across the WHOLE room, not per-agent.
+    // Recent conversation — now injected as a user-message prefix (not in
+    // the system prompt) so the persistent process can receive fresh context
+    // with every message without needing to restart.
     //
-    // Historical note: Octopal used to feed each agent only its own .octo
-    // history. That siloed every agent: if @developer answered a question,
-    // @designer would never see it on its next turn, making group chats
-    // feel choppy ("the other agent doesn't know what just happened").
-    //
-    // Now every non-isolated agent reads the shared `.octopal/room-history.json`
-    // and sees every turn in the room, self-tagged with "(me)" so it knows
-    // which lines it wrote itself. This is how AutoGen GroupChat and the
-    // OpenAI Agents SDK share context by default — there's no reason to
-    // reinvent isolation here.
-    //
-    // Budget packing: we pack from newest to oldest, include each message
-    // whole if it fits, and truncate the boundary message with "[…]" so
-    // the model knows something was cut. ~8000 chars ≈ 2000 tokens.
-    //
-    // Noise filters:
-    //   - `__dispatcher__` / `__system__` pseudo-agents (UI-only events)
-    //   - Empty / whitespace-only messages
-    //   - The CURRENT user turn (already on its way in as the prompt arg —
-    //     including it in history too would confuse claude about what's new)
-    //
-    // Isolated agents skip this entirely — they're single-shot workers.
+    // Budget packing: newest to oldest, ~8000 chars ≈ 2000 tokens.
+    // Noise filters: skip __dispatcher__/__system__, empty, current turn.
+    // Isolated agents skip entirely.
     const RECENT_HISTORY_CHAR_BUDGET: usize = 8000;
     const HARD_PER_MESSAGE_CAP: usize = 2000;
+
+    let mut history_prefix = String::new();
 
     if !is_isolated {
         let room_history_path = Path::new(&folder_path)
@@ -376,8 +360,6 @@ pub async fn send_message(
             .unwrap_or_default();
 
         if !all_msgs.is_empty() {
-            // Skip the tail user message if it's the one being processed
-            // right now (appendUserMessage writes BEFORE send_message runs).
             let current_prompt_trimmed = prompt.trim();
             let skip_last = all_msgs.last().map(|m| {
                 let is_user = m
@@ -412,8 +394,6 @@ pub async fn send_message(
                     .and_then(|v| v.as_str())
                     .unwrap_or("?");
 
-                // Drop UI-only pseudo-agents — dispatcher animations,
-                // system bundle notices, interrupt confirmation bubbles.
                 if speaker == "__dispatcher__" || speaker == "__system__" {
                     continue;
                 }
@@ -427,16 +407,12 @@ pub async fn send_message(
                     continue;
                 }
 
-                // Tag the speaker. "(me)" for the current agent's own
-                // past turns, plain name for user and peers.
                 let label = if speaker == agent_name {
                     format!("{} (me)", speaker)
                 } else {
                     speaker.to_string()
                 };
 
-                // Per-message hard cap so a single giant paste can't
-                // monopolize the budget.
                 let capped: String = if text.chars().count() > HARD_PER_MESSAGE_CAP {
                     let head: String = text.chars().take(HARD_PER_MESSAGE_CAP).collect();
                     format!("{}[…]", head)
@@ -461,18 +437,15 @@ pub async fn send_message(
             }
 
             if !included.is_empty() {
-                system_parts.push(format!(
-                    "\nRecent conversation in this room (you are @{name}):",
+                history_prefix.push_str(&format!(
+                    "Recent conversation in this room (you are @{name}):\n\
+                     Lines tagged \"(me)\" are your own earlier turns. Lines with other agents' names are peers speaking in the same room — you can reference what they said. Use this as context for your reply, but don't parrot back what's already been said.\n",
                     name = agent_name
                 ));
-                system_parts.push(
-                    "Lines tagged \"(me)\" are your own earlier turns. Lines with other agents' names are peers speaking in the same room — you can reference what they said. Use this as context for your reply, but don't parrot back what's already been said."
-                        .to_string(),
-                );
-                // We packed newest-first; flip back to chronological order.
                 for (label, text) in included.into_iter().rev() {
-                    system_parts.push(format!("[{}]: {}", label, text));
+                    history_prefix.push_str(&format!("[{}]: {}\n", label, text));
                 }
+                history_prefix.push('\n');
             }
         }
     }
@@ -487,13 +460,17 @@ pub async fn send_message(
         })
         .unwrap_or(false);
 
-    // Build claude args
+    // Build claude args — persistent session uses stream-json on both
+    // stdin and stdout so the process can be reused across messages.
     let mut claude_args: Vec<String> = vec![
         "-p".to_string(),
         "--print".to_string(),
         "--verbose".to_string(),
         "--output-format".to_string(),
         "stream-json".to_string(),
+        "--input-format".to_string(),
+        "stream-json".to_string(),
+        "--no-session-persistence".to_string(),
     ];
 
     // MCP config — always include, even if empty (matches Electron behavior)
@@ -645,7 +622,11 @@ pub async fn send_message(
         agent_name: agent_name.clone(),
     });
 
-    // Spawn claude CLI
+    // Spawn / reuse persistent claude CLI process.
+    //
+    // The process pool keeps long-running claude processes alive across
+    // messages. This eliminates the macOS TCC permission popup that fires
+    // every time a new process spawns and touches protected directories.
     let run_id_clone = run_id.clone();
     let app_clone = app.clone();
     let folder_clone = folder_path.clone();
@@ -654,10 +635,9 @@ pub async fn send_message(
     let state_interrupted = state.interrupted_runs.clone();
     let backup_tracker = state.backup_tracker.clone();
     let file_lock_manager = state.file_lock_manager.clone();
+    let process_pool = state.process_pool.clone();
 
-    // Opportunistic prune of old backups for this folder. Cheap if there's
-    // nothing to do; runs once per send_message. Reads retention limits up
-    // front so the spawned thread doesn't need access to ManagedState.
+    // Opportunistic prune of old backups for this folder.
     {
         let prune_folder = folder_path.clone();
         let (max_count, max_age) = {
@@ -676,309 +656,350 @@ pub async fn send_message(
         });
     }
 
-    let result = tokio::task::spawn_blocking(move || {
-        // GUI apps on macOS don't inherit shell PATH, and `claude`'s shebang
-        // relies on `env node` — `claude_command()` handles both.
-        let mut child = claude_command()
-            .args(&claude_args)
-            .current_dir(&folder_clone)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped()) // Capture stderr to diagnose errors
-            .stdin(Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+    // Compute config hash for cache invalidation (model + perms + MCP change → restart)
+    let config_hash = {
+        let model_str = claude_args.iter().skip_while(|a| *a != "--model").nth(1)
+            .cloned().unwrap_or_default();
+        let perms_str = format!("{:?}", perms);
+        let mcp_str = octo_content.get("mcpServers")
+            .map(|v| v.to_string()).unwrap_or_default();
+        super::process_pool::ProcessPool::hash_config(&[
+            &agent_name, &model_str, &perms_str, &mcp_str,
+        ])
+    };
 
-        // Read stderr in a separate thread to avoid deadlock
-        let stderr = child.stderr.take().unwrap();
-        let stderr_handle = std::thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            let mut stderr_output = String::new();
-            for line in reader.lines() {
-                if let Ok(l) = line {
-                    if stderr_output.len() < 8192 {
-                        stderr_output.push_str(&l);
-                        stderr_output.push('\n');
-                    }
+    // Prepend room history context to the user prompt
+    let contextual_prompt = if history_prefix.is_empty() {
+        final_prompt.clone()
+    } else {
+        format!("{}{}", history_prefix, final_prompt)
+    };
+
+    let pool_key = format!("{}::{}", folder_path, agent_name);
+    let pool_key_clone = pool_key.clone();
+    let claude_args_clone = claude_args.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        // Try to reuse an existing persistent process
+        let mut process = match process_pool.take(&pool_key_clone) {
+            Some(mut existing) => {
+                // Check if config changed or process died
+                if existing.config_hash != config_hash || !existing.is_alive() {
+                    eprintln!(
+                        "[process-pool] config changed or process dead for {}, creating new",
+                        pool_key_clone
+                    );
+                    existing.kill();
+                    let mut p = super::process_pool::ProcessPool::create_process(
+                        &claude_args_clone,
+                        &folder_clone,
+                    )?;
+                    p.config_hash = config_hash;
+                    p
+                } else {
+                    eprintln!("[process-pool] reusing process for {}", pool_key_clone);
+                    existing
                 }
             }
-            stderr_output
-        });
+            None => {
+                eprintln!("[process-pool] creating new process for {}", pool_key_clone);
+                let mut p = super::process_pool::ProcessPool::create_process(
+                    &claude_args_clone,
+                    &folder_clone,
+                )?;
+                p.config_hash = config_hash;
+                p
+            }
+        };
 
         // Store PID so stop_agent can kill it
-        let pid = child.id();
+        let pid = process.pid;
         state_agents.lock().unwrap().insert(run_id_clone.clone(), pid);
 
-        let stdout = child.stdout.take().unwrap();
-        let reader = BufReader::new(stdout);
+        // Send message via stdin (stream-json protocol)
+        process.send_message(&contextual_prompt)
+            .map_err(|e| format!("Failed to send message: {}", e))?;
 
         let mut final_result = String::new();
         let mut final_usage: Option<UsageData> = None;
+        let mut process_died = false;
 
-        for line in reader.lines() {
-            let line = match line {
-                Ok(l) => l,
-                Err(_) => continue,
-            };
-            if line.trim().is_empty() {
+        // Read stdout line-by-line until we get a `result` event.
+        // Unlike the old code that read until EOF, we break on `result`
+        // so the process stays alive for the next message.
+        loop {
+            let mut line = String::new();
+            match process.reader.read_line(&mut line) {
+                Ok(0) => {
+                    // EOF — process died
+                    process_died = true;
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("[process-pool] read error: {}", e);
+                    process_died = true;
+                    break;
+                }
+            }
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
                 continue;
             }
-            if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
-                // Handle assistant events (tool use, text)
-                if event.get("type").and_then(|v| v.as_str()) == Some("assistant") {
-                    if let Some(content) = event
-                        .get("message")
-                        .and_then(|m| m.get("content"))
-                        .and_then(|c| c.as_array())
-                    {
-                        for block in content {
-                            if block.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
-                                let tool = block
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("tool");
-                                let input = block.get("input").cloned().unwrap_or_default();
-                                let label = match tool {
-                                    "Bash" => {
-                                        let cmd = input
-                                            .get("command")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let trunc: String = cmd.chars().take(80).collect();
-                                        format!("Running: {}", trunc)
-                                    }
-                                    "Write" => {
-                                        let fp = input
-                                            .get("file_path")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let basename =
-                                            Path::new(fp).file_name().unwrap_or_default();
-                                        format!("Writing {}", basename.to_string_lossy())
-                                    }
-                                    "Edit" => {
-                                        let fp = input
-                                            .get("file_path")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let basename =
-                                            Path::new(fp).file_name().unwrap_or_default();
-                                        format!("Editing {}", basename.to_string_lossy())
-                                    }
-                                    "Read" => {
-                                        let fp = input
-                                            .get("file_path")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let basename =
-                                            Path::new(fp).file_name().unwrap_or_default();
-                                        format!("Reading {}", basename.to_string_lossy())
-                                    }
-                                    "Grep" => {
-                                        let pat = input
-                                            .get("pattern")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let trunc: String = pat.chars().take(40).collect();
-                                        format!("Searching for \"{}\"", trunc)
-                                    }
-                                    "Glob" => {
-                                        let pat = input
-                                            .get("pattern")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let trunc: String = pat.chars().take(40).collect();
-                                        format!("Finding {}", trunc)
-                                    }
-                                    _ => tool.to_string(),
+
+            let event = match serde_json::from_str::<serde_json::Value>(trimmed) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+            // Skip system events (init, etc.)
+            if event_type == "system" {
+                continue;
+            }
+
+            // Handle assistant events (tool use, text)
+            if event_type == "assistant" {
+                if let Some(content) = event
+                    .get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_array())
+                {
+                    for block in content {
+                        if block.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
+                            let tool = block
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("tool");
+                            let input = block.get("input").cloned().unwrap_or_default();
+                            let label = match tool {
+                                "Bash" => {
+                                    let cmd = input
+                                        .get("command")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let trunc: String = cmd.chars().take(80).collect();
+                                    format!("Running: {}", trunc)
+                                }
+                                "Write" => {
+                                    let fp = input
+                                        .get("file_path")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let basename =
+                                        Path::new(fp).file_name().unwrap_or_default();
+                                    format!("Writing {}", basename.to_string_lossy())
+                                }
+                                "Edit" => {
+                                    let fp = input
+                                        .get("file_path")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let basename =
+                                        Path::new(fp).file_name().unwrap_or_default();
+                                    format!("Editing {}", basename.to_string_lossy())
+                                }
+                                "Read" => {
+                                    let fp = input
+                                        .get("file_path")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let basename =
+                                        Path::new(fp).file_name().unwrap_or_default();
+                                    format!("Reading {}", basename.to_string_lossy())
+                                }
+                                "Grep" => {
+                                    let pat = input
+                                        .get("pattern")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let trunc: String = pat.chars().take(40).collect();
+                                    format!("Searching for \"{}\"", trunc)
+                                }
+                                "Glob" => {
+                                    let pat = input
+                                        .get("pattern")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let trunc: String = pat.chars().take(40).collect();
+                                    format!("Finding {}", trunc)
+                                }
+                                _ => tool.to_string(),
+                            };
+
+                            let _ = app_clone.emit(
+                                "octo:activity",
+                                ActivityEvent {
+                                    run_id: run_id_clone.clone(),
+                                    text: label,
+                                    folder_path: folder_clone.clone(),
+                                    agent_name: agent_name_clone.clone(),
+                                },
+                            );
+
+                            // Log meaningful tool uses
+                            if matches!(tool, "Write" | "Edit" | "Bash" | "WebFetch") {
+                                let target = match tool {
+                                    "Bash" => input
+                                        .get("command")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .chars()
+                                        .take(120)
+                                        .collect(),
+                                    "Write" | "Edit" => input
+                                        .get("file_path")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    "WebFetch" => input
+                                        .get("url")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    _ => String::new(),
                                 };
 
-                                let _ = app_clone.emit(
-                                    "octo:activity",
-                                    ActivityEvent {
-                                        run_id: run_id_clone.clone(),
-                                        text: label,
-                                        folder_path: folder_clone.clone(),
-                                        agent_name: agent_name_clone.clone(),
-                                    },
-                                );
-
-                                // Log meaningful tool uses
-                                if matches!(tool, "Write" | "Edit" | "Bash" | "WebFetch") {
-                                    let target = match tool {
-                                        "Bash" => input
-                                            .get("command")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .chars()
-                                            .take(120)
-                                            .collect(),
-                                        "Write" | "Edit" => input
-                                            .get("file_path")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string(),
-                                        "WebFetch" => input
-                                            .get("url")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string(),
-                                        _ => String::new(),
-                                    };
-
-                                    // For Write/Edit, snapshot the file (if first
-                                    // touch in this run) and check for cross-run
-                                    // lock conflicts. The snapshot races claude's
-                                    // own write, but in practice the JSON tool_use
-                                    // event reaches us before the disk write
-                                    // resolves for the typical small-file case —
-                                    // good enough for the safety net.
-                                    let mut backup_id: Option<String> = None;
-                                    let mut conflict_with: Option<
-                                        crate::commands::file_lock::LockHolder,
-                                    > = None;
-                                    if matches!(tool, "Write" | "Edit") {
-                                        let fp = input
-                                            .get("file_path")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        if !fp.is_empty() {
-                                            // Resolve to absolute for the lock key
-                                            let abs_path = if Path::new(fp).is_absolute() {
-                                                std::path::PathBuf::from(fp)
-                                            } else {
-                                                Path::new(&folder_clone).join(fp)
-                                            };
-                                            if let Err(existing) = file_lock_manager
-                                                .try_acquire(
-                                                    abs_path.clone(),
-                                                    &run_id_clone,
-                                                    &agent_name_clone,
-                                                )
-                                            {
-                                                conflict_with = Some(existing);
-                                            }
-                                            backup_id = backup_tracker.snapshot(
-                                                Path::new(&folder_clone),
+                                let mut backup_id: Option<String> = None;
+                                let mut conflict_with: Option<
+                                    crate::commands::file_lock::LockHolder,
+                                > = None;
+                                if matches!(tool, "Write" | "Edit") {
+                                    let fp = input
+                                        .get("file_path")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    if !fp.is_empty() {
+                                        let abs_path = if Path::new(fp).is_absolute() {
+                                            std::path::PathBuf::from(fp)
+                                        } else {
+                                            Path::new(&folder_clone).join(fp)
+                                        };
+                                        if let Err(existing) = file_lock_manager
+                                            .try_acquire(
+                                                abs_path.clone(),
                                                 &run_id_clone,
                                                 &agent_name_clone,
-                                                fp,
-                                            );
+                                            )
+                                        {
+                                            conflict_with = Some(existing);
                                         }
+                                        backup_id = backup_tracker.snapshot(
+                                            Path::new(&folder_clone),
+                                            &run_id_clone,
+                                            &agent_name_clone,
+                                            fp,
+                                        );
                                     }
-
-                                    let _ = app_clone.emit(
-                                        "activity:log",
-                                        ActivityLogEvent {
-                                            folder_path: folder_clone.clone(),
-                                            agent_name: agent_name_clone.clone(),
-                                            tool: tool.to_string(),
-                                            target,
-                                            ts: std::time::SystemTime::now()
-                                                .duration_since(std::time::UNIX_EPOCH)
-                                                .unwrap()
-                                                .as_millis()
-                                                as u64,
-                                            backup_id,
-                                            conflict_with,
-                                        },
-                                    );
                                 }
-                            } else if block.get("type").and_then(|v| v.as_str()) == Some("text") {
+
                                 let _ = app_clone.emit(
-                                    "octo:activity",
-                                    ActivityEvent {
-                                        run_id: run_id_clone.clone(),
-                                        text: "Writing response…".to_string(),
+                                    "activity:log",
+                                    ActivityLogEvent {
                                         folder_path: folder_clone.clone(),
                                         agent_name: agent_name_clone.clone(),
+                                        tool: tool.to_string(),
+                                        target,
+                                        ts: std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_millis()
+                                            as u64,
+                                        backup_id,
+                                        conflict_with,
                                     },
                                 );
                             }
+                        } else if block.get("type").and_then(|v| v.as_str()) == Some("text") {
+                            let _ = app_clone.emit(
+                                "octo:activity",
+                                ActivityEvent {
+                                    run_id: run_id_clone.clone(),
+                                    text: "Writing response…".to_string(),
+                                    folder_path: folder_clone.clone(),
+                                    agent_name: agent_name_clone.clone(),
+                                },
+                            );
                         }
                     }
                 }
+            }
 
-                // Handle result event
-                if event.get("type").and_then(|v| v.as_str()) == Some("result") {
-                    eprintln!("[octo:usage] result event received, has usage: {}, has total_cost_usd: {}, keys: {:?}",
-                        event.get("usage").is_some(),
-                        event.get("total_cost_usd").is_some(),
-                        event.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default()
+            // Handle result event — this signals end of response
+            if event_type == "result" {
+                eprintln!("[octo:usage] result event received, has usage: {}, has total_cost_usd: {}, keys: {:?}",
+                    event.get("usage").is_some(),
+                    event.get("total_cost_usd").is_some(),
+                    event.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default()
+                );
+                final_result = event
+                    .get("result")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                if let Some(u) = event.get("usage") {
+                    let mut usage = UsageData {
+                        input_tokens: u
+                            .get("input_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
+                        output_tokens: u
+                            .get("output_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0),
+                        cache_read_tokens: u
+                            .get("cache_read_input_tokens")
+                            .and_then(|v| v.as_u64()),
+                        cache_creation_tokens: u
+                            .get("cache_creation_input_tokens")
+                            .and_then(|v| v.as_u64()),
+                        cost_usd: event.get("total_cost_usd").and_then(|v| v.as_f64()),
+                        duration_ms: event.get("duration_ms").and_then(|v| v.as_u64()),
+                        model: None,
+                    };
+                    if let Some(model_usage) = event.get("modelUsage") {
+                        if let Some(obj) = model_usage.as_object() {
+                            usage.model = obj.keys().next().map(|k| k.clone());
+                        }
+                    }
+                    eprintln!("[octo:usage] emitting usage event: runId={}, inputTokens={}, outputTokens={}, model={:?}",
+                        run_id_clone, usage.input_tokens, usage.output_tokens, usage.model);
+                    let _ = app_clone.emit(
+                        "octo:usage",
+                        UsageEvent {
+                            run_id: run_id_clone.clone(),
+                            usage: usage.clone(),
+                        },
                     );
-                    final_result = event
-                        .get("result")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-
-                    // Extract usage
-                    if let Some(u) = event.get("usage") {
-                        let mut usage = UsageData {
-                            input_tokens: u
-                                .get("input_tokens")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0),
-                            output_tokens: u
-                                .get("output_tokens")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0),
-                            cache_read_tokens: u
-                                .get("cache_read_input_tokens")
-                                .and_then(|v| v.as_u64()),
-                            cache_creation_tokens: u
-                                .get("cache_creation_input_tokens")
-                                .and_then(|v| v.as_u64()),
-                            cost_usd: event.get("total_cost_usd").and_then(|v| v.as_f64()),
-                            duration_ms: event.get("duration_ms").and_then(|v| v.as_u64()),
-                            model: None,
-                        };
-                        if let Some(model_usage) = event.get("modelUsage") {
-                            if let Some(obj) = model_usage.as_object() {
-                                usage.model = obj.keys().next().map(|k| k.clone());
-                            }
-                        }
-                        // Emit event for real-time listeners
-                        eprintln!("[octo:usage] emitting usage event: runId={}, inputTokens={}, outputTokens={}, model={:?}",
-                            run_id_clone, usage.input_tokens, usage.output_tokens, usage.model);
-                        let _ = app_clone.emit(
-                            "octo:usage",
-                            UsageEvent {
-                                run_id: run_id_clone.clone(),
-                                usage: usage.clone(),
-                            },
-                        );
-                        // Also store for inclusion in the return value
-                        final_usage = Some(usage);
-                    }
+                    final_usage = Some(usage);
                 }
+
+                // Got the result — break out of the read loop.
+                // The process stays alive for the next message.
+                break;
             }
         }
 
-        let status = child.wait().map_err(|e| e.to_string())?;
-
-        // Collect stderr output
-        let stderr_output = stderr_handle.join().unwrap_or_default();
-
-        // Clean up: remove from running agents + drop file locks + drop
-        // backup-tracker in-memory state (backup files on disk persist).
+        // Clean up run tracking (but keep process alive in pool)
         state_agents.lock().unwrap().remove(&run_id_clone);
         file_lock_manager.release_run(&run_id_clone);
         backup_tracker.finalize_run(&run_id_clone);
 
-        // Check if this run was interrupted (user stopped it)
         let was_interrupted = state_interrupted.lock().unwrap().remove(&run_id_clone);
 
-        if !status.success() && !was_interrupted {
-            let mut err = format!("claude exited with code {:?}", status.code());
-            if !stderr_output.is_empty() {
-                err.push_str(&format!("\nstderr: {}", stderr_output.trim()));
-            }
-            return Err(err);
+        // Return process to pool if still alive and not interrupted
+        if !process_died && !was_interrupted && process.is_alive() {
+            process_pool.put(pool_key_clone, process);
+        } else if !was_interrupted && process_died {
+            // Process died unexpectedly — don't return to pool
+            eprintln!("[process-pool] process died during response for {}", pool_key_clone);
         }
 
-        // If result is empty but there's stderr, include it for debugging
-        if final_result.trim().is_empty() && !stderr_output.is_empty() {
-            eprintln!("[octopal] claude stderr: {}", stderr_output.trim());
+        if was_interrupted {
+            // User stopped the agent — process was killed externally
         }
 
         Ok::<(String, Option<UsageData>), String>((final_result.trim().to_string(), final_usage))
@@ -1080,6 +1101,8 @@ pub fn stop_agent(run_id: String, state: State<'_, ManagedState>) -> StopResult 
     let mut agents = state.running_agents.lock().unwrap();
     if let Some(pid) = agents.remove(&run_id) {
         state.interrupted_runs.lock().unwrap().insert(run_id);
+        // Remove from process pool so dead process isn't reused
+        state.process_pool.remove_by_pid(pid);
         kill_pid(pid);
         StopResult {
             ok: true,
@@ -1103,8 +1126,11 @@ pub fn stop_all_agents(state: State<'_, ManagedState>) -> StopAllResult {
             .lock()
             .unwrap()
             .insert(run_id);
+        state.process_pool.remove_by_pid(pid);
         kill_pid(pid);
     }
+    // Also kill any idle processes in the pool
+    state.process_pool.kill_all();
     StopAllResult {
         ok: true,
         stopped: count,
@@ -1116,7 +1142,7 @@ pub fn stop_all_agents(state: State<'_, ManagedState>) -> StopAllResult {
 ///
 /// On Unix: sends SIGTERM via `libc::kill`.
 /// On Windows: spawns `taskkill /PID <pid> /T /F` to kill the process tree.
-fn kill_pid(pid: u32) {
+pub fn kill_pid(pid: u32) {
     #[cfg(unix)]
     {
         unsafe {

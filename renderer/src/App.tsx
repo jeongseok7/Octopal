@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { mergeWithPending } from './utils'
 import { useTranslation } from 'react-i18next'
 import './i18n'
 import type { ActivityLogEntry, Attachment, InterruptConfirm, Message, PermissionRequest, TokenUsage } from './types'
@@ -269,7 +270,16 @@ export function App() {
       // Load history
       const { messages: history, hasMore } = await window.api.loadHistoryPaged({ folderPath: folder, limit: PAGE_SIZE })
       setHasMoreMessages((prev) => ({ ...prev, [folder]: hasMore }))
-      setMessages((prev) => ({ ...prev, [folder]: history.map(m => ({ ...m, text: sanitizeDisplayText(m.text ?? '') })) }))
+      setMessages((prev) => {
+        // Preserve in-memory pending messages (not yet persisted to disk)
+        const existing = prev[folder] || []
+        const pendingMessages = existing.filter((m) => m.pending)
+        const loaded = history.map(m => ({ ...m, text: sanitizeDisplayText(m.text ?? '') }))
+        // Merge: loaded history + any pending messages not already in the loaded set
+        const loadedIds = new Set(loaded.map((m) => m.id))
+        const missingPending = pendingMessages.filter((m) => !loadedIds.has(m.id))
+        return { ...prev, [folder]: [...loaded, ...missingPending] }
+      })
 
       // Auto-send greeting from assistant on fresh folders (no history yet)
       const assistant = existingOctos.find((o) => o.name === 'assistant')
@@ -848,20 +858,25 @@ export function App() {
 
     const userTs = bufferedMessages[0].ts
 
+    // ── Parse mentions first (needed for selective interrupt) ──
+    const allMentions = bufferedMessages.flatMap((m) => parseMentions(m.text))
+
     // ── Message Bundling & Interrupt ────────────────────
-    // Check if any agent is currently running in this folder.
-    // If so, determine if the new message is related (supplement/modify)
-    // and interrupt + bundle if needed.
+    // Only interrupt agents that are actually targeted by the user's message.
+    // If the user @mentions specific agents, only those get interrupted.
+    // If no mentions, defer interrupting until after routing.
     const runningInFolder = Array.from(activeRunsRef.current.entries())
       .filter(([key]) => key.startsWith(`${folderPath}::`))
 
-    if (runningInFolder.length > 0) {
-      const [, activeRun] = runningInFolder[0]
-      // When multiple agents are running, confirm with the user before
-      // interrupting. When a single agent is running, interrupt silently —
-      // the user just typed, so they expect the new message to land.
-      if (runningInFolder.length > 1) {
-        const runningAgentNames = runningInFolder.map(([, r]) => r.agentName)
+    // Helper to interrupt specific agents, show bundle message, and merge prompts
+    const interruptAndBundle = async (
+      targets: typeof runningInFolder
+    ) => {
+      if (targets.length === 0) return
+
+      // When multiple targets, confirm with the user before interrupting
+      if (targets.length > 1) {
+        const runningAgentNames = targets.map(([, r]) => r.agentName)
         const confirmMsgId = `interrupt-confirm-${Date.now()}`
 
         const confirmed = await new Promise<boolean>((resolve) => {
@@ -883,7 +898,7 @@ export function App() {
                 id: confirmMsgId,
                 agentName: '__system__',
                 text: t('app.interruptConfirm', {
-                  count: runningInFolder.length,
+                  count: targets.length,
                   agents: runningAgentNames.join(', '),
                 }),
                 ts: Date.now(),
@@ -897,21 +912,21 @@ export function App() {
         })
 
         if (!confirmed) {
-          // User cancelled — don't interrupt, don't route this message
-          return
+          return false // User cancelled
         }
       }
 
-      // Interrupt all running agents in this folder
-      for (const [, run] of runningInFolder) {
+      // Stop only the targeted agents
+      for (const [, run] of targets) {
         await window.api.stopAgent(run.runId)
       }
 
       // Show a system message about the interrupt + bundle
       const bundleMsgId = `bundle-${Date.now()}`
-      const stoppedNames = runningInFolder.length > 1
-        ? runningInFolder.map(([, r]) => `@${r.agentName}`).join(', ')
-        : `@${activeRun.agentName}`
+      const firstTarget = targets[0][1]
+      const stoppedNames = targets.length > 1
+        ? targets.map(([, r]) => `@${r.agentName}`).join(', ')
+        : `@${firstTarget.agentName}`
       setMessages((prev) => ({
         ...prev,
         [folderPath]: [
@@ -919,24 +934,36 @@ export function App() {
           {
             id: bundleMsgId,
             agentName: '__system__',
-            text: runningInFolder.length > 1
-              ? t('app.bundleMultiStop', { agents: stoppedNames, count: runningInFolder.length })
-              : t('app.bundleForward', { agent: activeRun.agentName }),
+            text: targets.length > 1
+              ? t('app.bundleMultiStop', { agents: stoppedNames, count: targets.length })
+              : t('app.bundleForward', { agent: firstTarget.agentName }),
             ts: Date.now(),
             pending: false,
           },
         ],
       }))
 
-      // Merge original prompt + new message so the rerouted agent gets full
-      // context. Replaces the old "modify vs supplement" classifier (always
-      // returned supplement), which was a stub that added overhead without
-      // improving quality.
-      combinedText = `${activeRun.prompt}\n\n${t('app.additionalInstruction', { text: combinedText })}`
+      // Merge original prompt + new message for full context
+      combinedText = `${firstTarget.prompt}\n\n${t('app.additionalInstruction', { text: combinedText })}`
+      return true
+    }
+
+    // If mentions exist, only interrupt running agents that match the mentions
+    if (runningInFolder.length > 0 && allMentions.length > 0) {
+      const isAll = allMentions.includes('all')
+      const interruptTargets = isAll
+        ? runningInFolder
+        : runningInFolder.filter(([, run]) =>
+            allMentions.some((m) => run.agentName.toLowerCase() === m.toLowerCase())
+          )
+
+      if (interruptTargets.length > 0) {
+        const result = await interruptAndBundle(interruptTargets)
+        if (result === false) return // User cancelled
+      }
     }
 
     // ── Routing ─────────────────────────────────────────
-    const allMentions = bufferedMessages.flatMap((m) => parseMentions(m.text))
     console.log('[Routing] allMentions:', allMentions, 'octos:', octos.map(o => o.name), 'hidden:', octos.filter(o => o.hidden).map(o => o.name))
     let leader: OctoFile | null = null
     let collaborators: OctoFile[] = []
@@ -1025,6 +1052,23 @@ export function App() {
     }
 
     console.log('[Routing] ✅ leader:', leader.name, 'collaborators:', collaborators.map(c => c.name), 'model:', dispatcherModel)
+
+    // ── Post-routing selective interrupt (no-mention case) ──
+    // When the user typed without @mentions and agents are running,
+    // only interrupt the agent that was selected by the dispatcher.
+    // Other running agents continue undisturbed.
+    if (allMentions.length === 0 && runningInFolder.length > 0) {
+      const allTargetNames = [leader, ...collaborators].map((a) => a.name.toLowerCase())
+      const interruptTargets = runningInFolder.filter(([, run]) =>
+        allTargetNames.includes(run.agentName.toLowerCase())
+      )
+
+      if (interruptTargets.length > 0) {
+        const result = await interruptAndBundle(interruptTargets)
+        if (result === false) return // User cancelled
+      }
+    }
+
     const called = new Set<string>([leader.name.toLowerCase()])
     invokeAgent(leader, combinedText, userTs, 0, called, collaborators, allAttachments, dispatcherModel)
   }
