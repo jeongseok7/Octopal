@@ -191,7 +191,7 @@ pub async fn send_message(
     if let Some(ref prompt) = md_prompt {
         system_parts.push(prompt.clone());
     } else {
-        system_parts.push("You are a \".octo\" file: a JSON file on disk that stores your name, role, memory, and conversation history.".to_string());
+        system_parts.push("You are an Octopal agent: a config.json file inside the octopal-agents/ folder that stores your name, role, memory, and conversation history.".to_string());
         if let Some(role) = octo_content.get("role").and_then(|v| v.as_str()) {
             system_parts.push(format!("\nYour role: {}", sanitize_prompt_field(role)));
         }
