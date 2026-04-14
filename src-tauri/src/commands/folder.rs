@@ -170,6 +170,14 @@ fn migrate_octo_files(folder_path: &str) {
     let root = Path::new(folder_path);
     let agents_dir = root.join(AGENTS_DIR);
 
+    // Always ensure octopal-agents/ exists (even for fresh folders with no legacy files)
+    if !agents_dir.is_dir() {
+        if fs::create_dir_all(&agents_dir).is_err() {
+            eprintln!("[octopal] failed to create {}", agents_dir.display());
+            return;
+        }
+    }
+
     // ── Case 1 & 3: Collect legacy .octo files from root and octopal-agents/ ──
     let mut legacy_octos: Vec<std::path::PathBuf> = vec![];
     for search_dir in [root.to_path_buf(), agents_dir.clone()] {
@@ -267,11 +275,16 @@ fn migrate_octo_files(folder_path: &str) {
             let _ = fs::write(&prompt_dest, &role);
         }
 
-        eprintln!(
-            "[octopal] migrated .octo {} → {}/config.json",
-            src.display(),
-            sub_dir.display()
-        );
+        // Remove original .octo file after successful migration
+        if let Err(e) = fs::remove_file(&src) {
+            eprintln!("[octopal] migrated but failed to remove {}: {}", src.display(), e);
+        } else {
+            eprintln!(
+                "[octopal] migrated .octo {} → {}/config.json",
+                src.display(),
+                sub_dir.display()
+            );
+        }
     }
 
     // ── Migrate flat .json + .md files ──
@@ -317,6 +330,13 @@ fn migrate_octo_files(folder_path: &str) {
             let _ = fs::copy(&old_md, &prompt_dest);
         }
 
+        // Remove original flat files after successful migration
+        if let Err(e) = fs::remove_file(&src) {
+            eprintln!("[octopal] migrated but failed to remove {}: {}", src.display(), e);
+        }
+        if old_md.exists() {
+            let _ = fs::remove_file(&old_md);
+        }
         eprintln!(
             "[octopal] migrated flat {} → {}/config.json",
             src.display(),
