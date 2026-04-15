@@ -1,6 +1,6 @@
 [package]
 name = "octopal"
-version = "0.1.38"
+version = "0.1.39"
 description = "Chat with your .octo agents"
 authors = ["Studio H"]
 edition = "2021"
@@ -19,7 +19,6 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset", "macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
-tauri-plugin-fs = "2"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
