@@ -64,12 +64,8 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$HOME/**" },
-        { "path": "$DOCUMENT/**" },
-        { "path": "$DOWNLOAD/**" },
-        { "path": "$DESKTOP/**" },
-        { "path": "/tmp/**" },
-        { "path": "/var/**" }
+        { "path": "$HOME/.octopal/**" },
+        { "path": "/tmp/**" }
       ]
     },
     "process:default",
