@@ -82,6 +82,17 @@ pub fn run() {
     let is_dev = cfg!(debug_assertions);
     let managed = ManagedState::new(is_dev);
 
+    // Clone the Arc so the background opus probe can write back to the cache
+    // without needing access to the full `ManagedState` after `.manage()`
+    // takes ownership.
+    let opus_cache = managed.best_opus_model.clone();
+    std::thread::spawn(move || {
+        let best = commands::model_probe::detect_best_opus();
+        if let Ok(mut guard) = opus_cache.lock() {
+            *guard = Some(best);
+        }
+    });
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             // Check if any .octo file was passed as argument
@@ -204,6 +215,9 @@ pub fn run() {
             commands::backup::read_current_file,
             commands::backup::revert_backup,
             commands::backup::prune_backups,
+            // Model probe (detects newest available Opus, e.g. 4.7)
+            commands::model_probe::get_best_opus_model,
+            commands::model_probe::reprobe_best_opus_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

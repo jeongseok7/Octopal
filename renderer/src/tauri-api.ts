@@ -227,6 +227,10 @@ export function createTauriApi(): typeof window.api {
     saveSettings: (settings) => invoke('save_settings', { settings }),
     getVersion: () => invoke('get_version'),
 
+    // ── Model probe ──
+    getBestOpusModel: () => invoke('get_best_opus_model'),
+    reprobeBestOpusModel: () => invoke('reprobe_best_opus_model'),
+
     // ── Multi-window ──
     newWindow: () => invoke('new_window'),
     getWindowCount: () => invoke('get_window_count'),

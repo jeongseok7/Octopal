@@ -19,6 +19,17 @@ import {
 
 type SettingsTab = 'general' | 'agents' | 'appearance' | 'shortcuts' | 'advanced' | 'about'
 
+// Converts an explicit Claude model name (e.g. `claude-opus-4-7`) into a
+// compact user-facing label (`Opus 4.7`). Falls back to the raw model name
+// if the format doesn't match so we never hide information from the user.
+function prettyOpusLabel(model: string): string {
+  const match = model.match(/^claude-([a-z]+)-(\d+)-(\d+)$/i)
+  if (!match) return model
+  const [, tier, major, minor] = match
+  const capitalized = tier.charAt(0).toUpperCase() + tier.slice(1)
+  return `${capitalized} ${major}.${minor}`
+}
+
 const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'ko', label: '한국어' },
@@ -47,6 +58,9 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
   >('idle')
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [downloadProgress, setDownloadProgress] = useState<number>(0)
+  // Newest explicit Opus model name (e.g. `claude-opus-4-7`) detected on this
+  // machine, or `null` while the probe is still running / no premium model.
+  const [bestOpusModel, setBestOpusModel] = useState<string | null>(null)
 
   const TABS: { id: SettingsTab; label: string; icon: typeof Settings }[] = [
     { id: 'general', label: t('settings.tabs.general'), icon: Settings },
@@ -67,6 +81,36 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
   useEffect(() => {
     window.api.loadSettings().then(setSettings)
     window.api.getVersion().then(setVersionInfo)
+    // Query the best available Opus variant. The backend probes on startup,
+    // but the result may not be ready yet — poll briefly to pick it up once
+    // the probe finishes. Gracefully skipped under Electron where this API
+    // isn't implemented.
+    const probeFn = window.api.getBestOpusModel
+    if (probeFn) {
+      let cancelled = false
+      let attempts = 0
+      const tick = () => {
+        if (cancelled) return
+        probeFn()
+          .then((m) => {
+            if (cancelled) return
+            if (m) {
+              setBestOpusModel(m)
+            } else if (attempts < 30) {
+              // probe hasn't finished yet — retry up to ~30s
+              attempts += 1
+              setTimeout(tick, 1000)
+            }
+          })
+          .catch(() => {
+            // non-Tauri or command missing — ignore silently
+          })
+      }
+      tick()
+      return () => {
+        cancelled = true
+      }
+    }
   }, [])
 
   const update = <K extends keyof AppSettings>(
@@ -213,8 +257,11 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
 
   return (
     <div className="settings-panel">
+      {/* Top drag strip — spans full width so users can drag the window
+          from above either column on the settings page. */}
+      <div className="settings-drag-strip drag" data-tauri-drag-region />
       <div className="settings-sidebar">
-        <h2 className="settings-title">{t('settings.title')}</h2>
+        <h2 className="settings-title drag" data-tauri-drag-region>{t('settings.title')}</h2>
         <nav className="settings-nav">
           {TABS.map((tb) => (
             <button
@@ -514,7 +561,7 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
               </span>
               <input
                 type="checkbox"
-                checked={settings.advanced?.autoModelSelection !== false}
+                checked={settings.advanced?.autoModelSelection === true}
                 onChange={(e) =>
                   update('advanced', { autoModelSelection: e.target.checked })
                 }
@@ -524,7 +571,7 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
             </label>
 
             {/* Default Agent Model Selector (shown when auto is off) */}
-            {settings.advanced?.autoModelSelection === false && (
+            {settings.advanced?.autoModelSelection !== true && (
               <div className="settings-field" style={{ marginLeft: 16, opacity: 0.9 }}>
                 <span className="settings-toggle-info">
                   <span className="settings-label">
@@ -534,15 +581,26 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
                 </span>
                 <select
                   className="settings-select"
-                  value={settings.advanced?.defaultAgentModel || 'haiku'}
+                  value={settings.advanced?.defaultAgentModel || 'opus'}
                   onChange={(e) =>
                     update('advanced', { defaultAgentModel: e.target.value as 'haiku' | 'sonnet' | 'opus' })
                   }
                 >
                   <option value="haiku">{t('settings.advanced.modelHaiku')}</option>
                   <option value="sonnet">{t('settings.advanced.modelSonnet')}</option>
-                  <option value="opus">{t('settings.advanced.modelOpus')}</option>
+                  <option value="opus">
+                    {t('settings.advanced.modelOpus')}
+                    {bestOpusModel ? ` — ${prettyOpusLabel(bestOpusModel)}` : ''}
+                  </option>
                 </select>
+                {bestOpusModel && (
+                  <span
+                    className="settings-desc"
+                    style={{ marginLeft: 16, display: 'block', marginTop: 4 }}
+                  >
+                    {t('settings.advanced.opusDetected', { model: prettyOpusLabel(bestOpusModel) })}
+                  </span>
+                )}
               </div>
             )}
 

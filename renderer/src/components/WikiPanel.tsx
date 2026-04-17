@@ -1,7 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FileText, Plus, Trash2, Save } from 'lucide-react'
+import { FileText, Plus, Trash2, Save, ChevronDown, ChevronRight } from 'lucide-react'
 import { MarkdownRenderer } from './MarkdownRenderer'
+
+/** Split "docs/guides/intro.md" → { folder: "docs/guides", file: "intro.md" }
+ *  Pages at root return folder = "" (empty string). */
+function splitFolder(name: string): { folder: string; file: string } {
+  const i = name.lastIndexOf('/')
+  if (i === -1) return { folder: '', file: name }
+  return { folder: name.slice(0, i), file: name.slice(i + 1) }
+}
 
 interface WikiPanelProps {
   workspaceId: string
@@ -16,6 +24,35 @@ export function WikiPanel({ workspaceId }: WikiPanelProps) {
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
   const [newPageName, setNewPageName] = useState<string | null>(null)
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set())
+
+  // Group pages by folder prefix. Root pages go under "" (empty key).
+  // Folders sorted alphabetically; root pages rendered first.
+  const grouped = useMemo(() => {
+    const map = new Map<string, WikiPage[]>()
+    for (const p of pages) {
+      const { folder } = splitFolder(p.name)
+      const arr = map.get(folder) ?? []
+      arr.push(p)
+      map.set(folder, arr)
+    }
+    const entries = Array.from(map.entries())
+    entries.sort(([a], [b]) => {
+      if (a === '') return -1
+      if (b === '') return 1
+      return a.localeCompare(b)
+    })
+    return entries
+  }, [pages])
+
+  const toggleFolder = (folder: string) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(folder)) next.delete(folder)
+      else next.add(folder)
+      return next
+    })
+  }
 
   const refreshPages = () => {
     window.api.wikiList(workspaceId).then((list) => {
@@ -122,20 +159,47 @@ export function WikiPanel({ workspaceId }: WikiPanelProps) {
           {pages.length === 0 && (
             <div className="empty-agents">{t('wiki.noPages')}</div>
           )}
-          {pages.map((p) => (
-            <button
-              key={p.name}
-              className={`wiki-page-item ${p.name === selected ? 'active' : ''}`}
-              onClick={() => {
-                if (dirty && !confirm(t('wiki.discardChanges'))) return
-                setSelected(p.name)
-                setEditMode(false)
-              }}
-            >
-              <FileText size={12} />
-              <span className="wiki-page-name">{p.name.replace(/\.md$/, '')}</span>
-            </button>
-          ))}
+          {grouped.map(([folder, folderPages]) => {
+            const collapsed = collapsedFolders.has(folder)
+            const renderPage = (p: WikiPage) => {
+              const { file } = splitFolder(p.name)
+              return (
+                <button
+                  key={p.name}
+                  className={`wiki-page-item ${p.name === selected ? 'active' : ''}`}
+                  onClick={() => {
+                    if (dirty && !confirm(t('wiki.discardChanges'))) return
+                    setSelected(p.name)
+                    setEditMode(false)
+                  }}
+                >
+                  <FileText size={12} />
+                  <span className="wiki-page-name">{file.replace(/\.md$/, '')}</span>
+                </button>
+              )
+            }
+            // Root group: no header, just render pages flat
+            if (folder === '') {
+              return (
+                <div key="__root__" className="wiki-folder-group">
+                  {folderPages.map(renderPage)}
+                </div>
+              )
+            }
+            return (
+              <div key={folder} className="wiki-folder-group">
+                <button
+                  className="wiki-folder-header"
+                  onClick={() => toggleFolder(folder)}
+                  title={folder}
+                >
+                  {collapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+                  <span className="wiki-folder-name">{folder}</span>
+                </button>
+                {!collapsed && folderPages.map(renderPage)}
+              </div>
+            )
+          })}
         </div>
       </aside>
 
@@ -151,7 +215,7 @@ export function WikiPanel({ workspaceId }: WikiPanelProps) {
           </div>
         ) : (
           <>
-            <header className="wiki-header">
+            <header className="wiki-header drag" data-tauri-drag-region>
               <div className="wiki-title">{selected.replace(/\.md$/, '')}</div>
               <div className="wiki-actions">
                 <button

@@ -4,7 +4,16 @@
   "app": {
     "windows": [
       {
-        "title": "Octopal Dev"
+        "title": "Octopal Dev",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 300,
+        "minHeight": 400,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": false,
+        "dragDropEnabled": true
       }
     ]
   }

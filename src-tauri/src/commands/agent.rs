@@ -227,28 +227,31 @@ pub async fn send_message(
         if let Some(ws) = s.workspaces.iter().find(|w| w.folders.contains(&folder_path)) {
             let wiki_dir = state.wiki_dir(&ws.id);
             fs::create_dir_all(&wiki_dir).ok();
-            let pages: Vec<String> = fs::read_dir(&wiki_dir)
-                .ok()
-                .map(|rd| {
-                    rd.flatten()
-                        .filter_map(|e| {
-                            let name = e.file_name().to_string_lossy().to_string();
-                            if name.ends_with(".md") {
-                                Some(name)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let page_list = if pages.is_empty() {
+            // Recursively collect pages so sub-folder pages (e.g. "docs/intro.md")
+            // also show up in the agent's context, not just root-level files.
+            let mut collected: Vec<super::wiki::WikiPage> = vec![];
+            super::wiki::collect_pages(&wiki_dir, &wiki_dir, 0, &mut collected);
+            collected.sort_by(|a, b| a.name.cmp(&b.name));
+            let page_list = if collected.is_empty() {
                 "(none yet)".to_string()
             } else {
-                pages.join(", ")
+                collected
+                    .iter()
+                    .map(|p| p.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             };
             system_parts.push(format!(
-                "\nWorkspace wiki — shared notes for the team:\n- Path: {}\n- Pages: {}\n- Read: use Read tool with absolute path. Write/Edit: same, .md files only.",
+                "\nWorkspace wiki — shared notes for the team:\n\
+                 - Path: {}\n\
+                 - Pages: {}\n\
+                 - Read: use Read tool with absolute path. Write/Edit: same, .md files only.\n\
+                 - Folder grouping: page names may contain forward slashes to nest into folders \
+                 (e.g. `docs/intro.md`, `design/tokens.md`). When you create a new wiki page, \
+                 prefer grouping related notes under a short, descriptive folder \
+                 (e.g. docs/, design/, specs/) instead of dumping everything at the root. \
+                 Create the parent directory implicitly by writing to the nested path — \
+                 the app handles it automatically.",
                 wiki_dir.display(),
                 page_list
             ));
@@ -486,29 +489,58 @@ pub async fn send_message(
     claude_args.push("--mcp-config".to_string());
     claude_args.push(mcp_config.to_string());
 
-    // Model — extract settings values in a block to avoid holding MutexGuard across await
-    {
+    // Model — extract settings values in a block to avoid holding MutexGuard across await.
+    // The chosen alias is then passed through `resolve_model_for_cli`, which
+    // substitutes the newest available Opus (e.g. `claude-opus-4-7`) when the
+    // user's effective tier is `opus` and the startup probe found one on this
+    // machine. This keeps the UI/settings simple (3 tiers) while letting
+    // subscribers with Opus 4.7 access benefit automatically.
+    let chosen_alias: Option<String> = {
         let settings = state.settings.lock().map_err(|e| e.to_string())?;
         let auto_model = settings.advanced.auto_model_selection;
         let allowed = ["haiku", "sonnet", "opus"];
-        if auto_model {
-            if let Some(ref m) = model {
-                if allowed.contains(&m.as_str()) {
-                    claude_args.push("--model".to_string());
-                    claude_args.push(m.clone());
-                }
-            }
+        // Fall back to the user's configured default whenever the caller (or
+        // dispatcher) didn't pin a specific tier. Without this, auto-model
+        // mode with a `None` suggestion would omit `--model` entirely and let
+        // the Claude CLI pick its own default (often Haiku), contradicting
+        // the user's "Default model: Opus" setting.
+        let default_model = &settings.advanced.default_agent_model;
+        let fallback = if allowed.contains(&default_model.as_str()) {
+            default_model.clone()
         } else {
-            let default_model = &settings.advanced.default_agent_model;
-            let m = if allowed.contains(&default_model.as_str()) {
-                default_model.clone()
-            } else {
-                "opus".to_string()
-            };
-            claude_args.push("--model".to_string());
-            claude_args.push(m);
+            "opus".to_string()
+        };
+        if auto_model {
+            Some(
+                model
+                    .as_ref()
+                    .and_then(|m| {
+                        if allowed.contains(&m.as_str()) {
+                            Some(m.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(fallback),
+            )
+        } else {
+            Some(fallback)
         }
-    } // settings guard dropped here
+    }; // settings guard dropped here
+    if let Some(alias) = chosen_alias.clone() {
+        let resolved = crate::commands::model_probe::resolve_model_for_cli(&alias, &state);
+        eprintln!(
+            "[agent:model] agent={} alias={} resolved={} (auto_model_in={:?})",
+            agent_name, alias, resolved, model
+        );
+        claude_args.push("--model".to_string());
+        claude_args.push(resolved);
+    } else {
+        eprintln!(
+            "[agent:model] agent={} NO MODEL PUSHED (auto_model_in={:?})",
+            agent_name, model
+        );
+    }
 
     // Permissions args — if any grant is set, use --dangerously-skip-permissions
     // and selectively block the ungranted tools. If no grants at all, claude's
@@ -612,7 +644,12 @@ pub async fn send_message(
     if !all_refs.is_empty() {
         final_prompt = format!("{}\n\n{}", all_refs.join(" "), prompt);
     }
-    claude_args.push(final_prompt.clone());
+    // NOTE: We intentionally do NOT push `final_prompt` as a positional CLI
+    // argument. Claude CLI's auto-mode classifier runs on positional prompts
+    // and can downgrade to Haiku even when `--model claude-opus-4-7` is set
+    // explicitly. The prompt is sent via stdin (stream-json) in
+    // `process.send_message(&contextual_prompt)` below, so the positional
+    // arg is redundant and actively harmful.
 
     // Emit activity
     let _ = app.emit("octo:activity", ActivityEvent {
@@ -655,6 +692,8 @@ pub async fn send_message(
             );
         });
     }
+
+    eprintln!("[agent:args] agent={} args={:?}", agent_name, claude_args);
 
     // Compute config hash for cache invalidation (model + perms + MCP change → restart)
     let config_hash = {
@@ -723,6 +762,12 @@ pub async fn send_message(
         let mut final_result = String::new();
         let mut final_usage: Option<UsageData> = None;
         let mut process_died = false;
+        // Authoritative model for this run — taken from the assistant message's
+        // `message.model` field. Claude Code may consult Haiku for internal
+        // steps while Opus generates the reply, so `modelUsage` can contain
+        // multiple models; the assistant message's `.model` is the one that
+        // actually produced the user-visible answer.
+        let mut assistant_model: Option<String> = None;
 
         // Read stdout line-by-line until we get a `result` event.
         // Unlike the old code that read until EOF, we break on `result`
@@ -762,6 +807,16 @@ pub async fn send_message(
 
             // Handle assistant events (tool use, text)
             if event_type == "assistant" {
+                // Capture the model that produced this assistant message.
+                // The LAST assistant message's model wins (it's the one that
+                // produced the final text).
+                if let Some(m) = event
+                    .get("message")
+                    .and_then(|msg| msg.get("model"))
+                    .and_then(|v| v.as_str())
+                {
+                    assistant_model = Some(m.to_string());
+                }
                 if let Some(content) = event
                     .get("message")
                     .and_then(|m| m.get("content"))
@@ -929,10 +984,10 @@ pub async fn send_message(
 
             // Handle result event — this signals end of response
             if event_type == "result" {
-                eprintln!("[octo:usage] result event received, has usage: {}, has total_cost_usd: {}, keys: {:?}",
+                eprintln!("[octo:usage] result event received, has usage: {}, fast_mode_state: {:?}, modelUsage: {:?}",
                     event.get("usage").is_some(),
-                    event.get("total_cost_usd").is_some(),
-                    event.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default()
+                    event.get("fast_mode_state"),
+                    event.get("modelUsage")
                 );
                 final_result = event
                     .get("result")
@@ -960,11 +1015,21 @@ pub async fn send_message(
                         duration_ms: event.get("duration_ms").and_then(|v| v.as_u64()),
                         model: None,
                     };
-                    if let Some(model_usage) = event.get("modelUsage") {
-                        if let Some(obj) = model_usage.as_object() {
-                            usage.model = obj.keys().next().map(|k| k.clone());
-                        }
-                    }
+                    // Prefer the assistant message's `model` field — it's the
+                    // actual model that produced the reply. Fall back to
+                    // picking the `modelUsage` key with the most output_tokens
+                    // (the primary generator) rather than alphabetically first,
+                    // so "haiku" doesn't win over "opus" when Claude Code
+                    // invokes Haiku for internal steps.
+                    usage.model = assistant_model.clone().or_else(|| {
+                        event.get("modelUsage").and_then(|mu| mu.as_object()).and_then(|obj| {
+                            obj.iter()
+                                .max_by_key(|(_, v)| {
+                                    v.get("outputTokens").and_then(|n| n.as_u64()).unwrap_or(0)
+                                })
+                                .map(|(k, _)| k.clone())
+                        })
+                    });
                     eprintln!("[octo:usage] emitting usage event: runId={}, inputTokens={}, outputTokens={}, model={:?}",
                         run_id_clone, usage.input_tokens, usage.output_tokens, usage.model);
                     let _ = app_clone.emit(

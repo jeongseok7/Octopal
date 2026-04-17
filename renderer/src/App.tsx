@@ -207,29 +207,42 @@ export function App() {
 
   // Compact mode: below this threshold sidebars open as overlays
   const COMPACT_BREAKPOINT = 700
-  // Auto-collapse: below this threshold sidebars auto-close
+  // Auto-collapse: below this threshold the left sidebar auto-closes
   const COLLAPSE_BREAKPOINT = 900
+  // Right sidebar tracks the app's default width — closes when smaller, opens when ≥
+  const RIGHT_SIDEBAR_BREAKPOINT = 1200
   const [compactMode, setCompactMode] = useState(window.innerWidth < COMPACT_BREAKPOINT)
 
-  // Track whether sidebars were auto-collapsed by resize (not manually closed)
+  // Track whether left sidebar was auto-collapsed by resize (not manually closed)
   const autoCollapsedRef = useRef(false)
+  // Track last-known "side" of the right breakpoint so we only toggle on crossings,
+  // preserving the user's manual open/close choice while the window stays on one side.
+  const rightAboveRef = useRef(window.innerWidth >= RIGHT_SIDEBAR_BREAKPOINT)
 
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth
       setCompactMode(w < COMPACT_BREAKPOINT)
+
+      // Left sidebar: auto-collapse below COLLAPSE_BREAKPOINT, restore above
       if (w < COLLAPSE_BREAKPOINT) {
         if (!autoCollapsedRef.current) {
           autoCollapsedRef.current = true
           setLeftSidebarOpen(false)
-          setRightSidebarOpen(false)
         }
       } else {
         if (autoCollapsedRef.current) {
           autoCollapsedRef.current = false
           setLeftSidebarOpen(true)
-          setRightSidebarOpen(true)
         }
+      }
+
+      // Right sidebar: follow the app's default-width breakpoint.
+      // Only change state when crossing the threshold — manual toggles in between are preserved.
+      const nowAbove = w >= RIGHT_SIDEBAR_BREAKPOINT
+      if (nowAbove !== rightAboveRef.current) {
+        rightAboveRef.current = nowAbove
+        setRightSidebarOpen(nowAbove)
       }
     }
     window.addEventListener('resize', handleResize)
@@ -462,7 +475,13 @@ export function App() {
           merged = attachHandoff(merged)
           return merged
         })
-        return { ...prev, [folder]: [...mergedHistory, ...missingPreserved] }
+        // Sort by ts so `missingPreserved` items (old in-memory bubbles not in
+        // current disk history) land at their correct chronological position
+        // instead of piling up at the bottom.
+        const combined = [...mergedHistory, ...missingPreserved].sort(
+          (a, b) => (a.ts ?? 0) - (b.ts ?? 0)
+        )
+        return { ...prev, [folder]: combined }
       })
     }
 
@@ -554,7 +573,15 @@ export function App() {
               if (handoffMap.has(m.id)) merged = { ...merged, handoff: handoffMap.get(m.id) }
               return merged
             })
-            return { ...prev, [changedFolder]: [...mergedHistory, ...missingPreserved] }
+            // Concatenating `missingPreserved` at the end would dump old-but-
+            // still-in-memory bubbles (unresolved permission requests, pending
+            // agents) below brand-new messages from disk. Sort by `ts` so every
+            // message lands at its real chronological position regardless of
+            // which side (memory vs. disk) it came from.
+            const combined = [...mergedHistory, ...missingPreserved].sort(
+              (a, b) => (a.ts ?? 0) - (b.ts ?? 0)
+            )
+            return { ...prev, [changedFolder]: combined }
           })
         })
       }

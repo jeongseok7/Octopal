@@ -235,6 +235,13 @@ pub struct ManagedState {
     /// Persistent Claude CLI process pool — reuses long-running processes
     /// to avoid macOS TCC permission popups on every spawn.
     pub process_pool: Arc<ProcessPool>,
+    /// Cached result of probing the Claude CLI for the newest Opus model
+    /// available on this machine (e.g. `claude-opus-4-7`). Nested Option:
+    ///   outer `None`      → probe hasn't finished yet
+    ///   outer `Some(None)` → probe ran, no premium opus available
+    ///   outer `Some(Some)` → probe ran, this is the best explicit name
+    /// See `commands::model_probe` for details.
+    pub best_opus_model: Arc<Mutex<Option<Option<String>>>>,
 }
 
 impl ManagedState {
@@ -279,6 +286,7 @@ impl ManagedState {
             backup_tracker: Arc::new(BackupTracker::new()),
             file_lock_manager: Arc::new(FileLockManager::new()),
             process_pool: Arc::new(ProcessPool::new()),
+            best_opus_model: Arc::new(Mutex::new(None)),
         }
     }
 

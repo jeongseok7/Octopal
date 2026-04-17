@@ -659,11 +659,68 @@ export function ChatPanel({
     setShowScrollDown(false)
   }, [activeFolder])
 
+  // Pin-to-bottom window: when a folder becomes active (app start or folder
+  // switch), keep the messages container pinned to the absolute bottom across
+  // late layout shifts — images loading, code blocks highlighting, webfonts
+  // swapping in, avatar slide-in animations, etc. Without this, setting
+  // scrollTop = scrollHeight once on mount lands "slightly above the bottom"
+  // because the content grows after the initial scroll.
+  //
+  // The window stops after ~2s, or immediately if the user scrolls up.
+  const hasFolderMessages = folderMessages.length > 0
+  useEffect(() => {
+    if (!activeFolder || !hasFolderMessages) return
+    const el = messagesContainerRef.current
+    if (!el) return
+
+    let cancelled = false
+    let ro: ResizeObserver | null = null
+
+    const pin = () => {
+      if (cancelled) return
+      const container = messagesContainerRef.current
+      if (!container) return
+      // Respect user intent: if they scrolled up during the pin window, stop.
+      if (!isNearBottomRef.current) {
+        cancelled = true
+        ro?.disconnect()
+        return
+      }
+      container.scrollTop = container.scrollHeight
+    }
+
+    // Synchronous + next-frame passes — cover the initial render.
+    pin()
+    requestAnimationFrame(pin)
+    requestAnimationFrame(() => requestAnimationFrame(pin))
+
+    // Scheduled passes — cover async content (images, highlight.js, webfonts).
+    const timers = [50, 150, 300, 600, 1000, 1500].map((ms) => setTimeout(pin, ms))
+
+    // ResizeObserver — covers any reshape we didn't anticipate.
+    ro = new ResizeObserver(pin)
+    ro.observe(el)
+
+    const stopTimer = setTimeout(() => {
+      cancelled = true
+      ro?.disconnect()
+    }, 2000)
+
+    return () => {
+      cancelled = true
+      ro?.disconnect()
+      timers.forEach(clearTimeout)
+      clearTimeout(stopTimer)
+    }
+  }, [activeFolder, hasFolderMessages])
+
   useEffect(() => {
     if (!activeFolder || folderMessages.length === 0) return
 
     if (initialScrollDoneRef.current !== activeFolder) {
       initialScrollDoneRef.current = activeFolder
+      // The pin-to-bottom window effect above handles late layout shifts;
+      // this initial rAF keeps the first paint at the bottom.
       requestAnimationFrame(() => {
         const el = messagesContainerRef.current
         if (el) {

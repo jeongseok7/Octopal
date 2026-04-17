@@ -286,6 +286,12 @@ interface Window {
     saveSettings: (settings: AppSettings) => Promise<{ ok: true }>
     getVersion: () => Promise<{ version: string; electron: string; node: string }>
 
+    // Model probe — detects which explicit Opus version (e.g. claude-opus-4-7)
+    // is available to the user's Claude CLI. Returns null until the startup
+    // probe finishes, or the full model name when a newer Opus is accessible.
+    getBestOpusModel?: () => Promise<string | null>
+    reprobeBestOpusModel?: () => Promise<string | null>
+
     // Multi-window
     newWindow: () => Promise<{ ok: true; windowId: number } | { ok: false; error: string }>
     getWindowCount: () => Promise<{ count: number; max: number }>
