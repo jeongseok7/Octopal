@@ -15,3 +15,5 @@ pub mod skills;
 pub mod goose_acp;
 pub mod goose_acp_mapper;
 pub mod goose_acp_pool;
+pub mod model_alias;
+pub mod providers_manifest;
