@@ -911,7 +911,7 @@ export function ChatPanel({
         setSlashHintIndex((prev) => (prev - 1 + slashHints.length) % slashHints.length)
         return
       }
-      if (e.key === 'Tab' || e.key === 'Enter') {
+      if (e.key === 'Tab') {
         if (e.nativeEvent.isComposing || e.keyCode === 229) return
         e.preventDefault()
         applySlashHint(slashHints[slashHintIndex])
