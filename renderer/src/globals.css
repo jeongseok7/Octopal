@@ -254,6 +254,11 @@
   --font-base: 14px;
   --font-lg: 18px;
 
+  /* Font families */
+  --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  --font-chat: var(--font-ui);
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+
   /* Transition */
   --transition: 0.15s ease;
 }
@@ -333,7 +338,7 @@ html,
 body,
 #root {
   height: 100%;
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  font-family: var(--font-ui);
   font-size: var(--font-base);
   color: var(--text-primary);
   background: var(--bg-base);
@@ -348,20 +353,23 @@ button,
 input,
 textarea,
 select {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  font-family: var(--font-ui);
 }
 
 /* Korean locale: use Pretendard as primary font */
+html[lang='ko'] {
+  --font-ui: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+}
 html[lang='ko'],
 html[lang='ko'] body,
 html[lang='ko'] #root {
-  font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  font-family: var(--font-ui);
 }
 html[lang='ko'] button,
 html[lang='ko'] input,
 html[lang='ko'] textarea,
 html[lang='ko'] select {
-  font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  font-family: var(--font-ui);
 }
 
 button {
@@ -2815,6 +2823,7 @@ button {
   line-height: 1.5;
   word-wrap: break-word;
   white-space: pre-wrap;
+  font-family: var(--font-chat);
 }
 
 /* User messages stay plain text */
@@ -2932,7 +2941,7 @@ button {
   background: rgba(255, 255, 255, 0.08);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.9em;
   color: #e5a0ff;
   white-space: pre-wrap;
@@ -2947,7 +2956,7 @@ button {
   padding: 12px 14px;
   margin: 0.5em 0;
   overflow-x: auto;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.85em;
   line-height: 1.5;
 }
@@ -4722,6 +4731,16 @@ button {
   box-shadow: 0 0 0 4px var(--accent-glow), 0 1px 4px rgba(0,0,0,0.3);
 }
 
+.font-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+}
+
 /* Shortcuts */
 .settings-shortcut-list {
   display: flex;
@@ -6349,20 +6368,20 @@ button {
 
 .providers-status-banner.info {
   background: var(--bg-elevated);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: var(--fg, #e5e5e5);
+  border-color: var(--border);
+  color: var(--text-primary);
 }
 
 .providers-status-banner.warn {
-  background: rgba(200, 160, 40, 0.08);
-  border-color: rgba(200, 160, 40, 0.35);
-  color: #e0c060;
+  background: var(--warning-bg);
+  border-color: var(--warning);
+  color: var(--warning-text);
 }
 
 .providers-status-banner.error {
-  background: rgba(196, 32, 48, 0.08);
-  border-color: rgba(196, 32, 48, 0.45);
-  color: var(--accent, #c42030);
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger-text);
 }
 
 .providers-status-banner svg {
@@ -6379,7 +6398,7 @@ button {
 
 .provider-card {
   background: var(--bg-elevated);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px 16px;
 }
@@ -6394,7 +6413,7 @@ button {
 .provider-card-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--fg, #e5e5e5);
+  color: var(--text-heading);
 }
 
 .provider-card-status {
@@ -6402,23 +6421,23 @@ button {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-secondary);
 }
 
 .provider-card-status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--text-muted);
 }
 
 .provider-card-status.active {
-  color: #4ade80;
+  color: var(--success);
 }
 
 .provider-card-status.active .provider-card-status-dot {
-  background: #4ade80;
-  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success-glow);
 }
 
 .provider-card-body {
@@ -6429,7 +6448,7 @@ button {
 
 .provider-card-label {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
   margin-bottom: -2px;
 }
 
@@ -6443,21 +6462,21 @@ button {
   flex: 1;
   min-width: 0;
   padding: 7px 10px;
-  background: var(--bg-base, #090909);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
   border-radius: 5px;
-  color: var(--fg, #e5e5e5);
+  color: var(--text-primary);
   font-size: 12px;
   font-family: ui-monospace, Menlo, monospace;
 }
 
 .provider-card-input:focus {
   outline: none;
-  border-color: var(--accent, #c42030);
+  border-color: var(--accent);
 }
 
 .provider-card-input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-muted);
 }
 
 .provider-card-icon-btn {
@@ -6465,16 +6484,17 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-hover, #1f1f1f);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
   border-radius: 5px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
 .provider-card-icon-btn:hover {
-  background: var(--bg-active, #2a2a2a);
-  color: var(--fg, #e5e5e5);
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
 }
 
 .provider-card-actions {
@@ -6489,17 +6509,18 @@ button {
   align-items: center;
   gap: 5px;
   padding: 6px 11px;
-  background: var(--bg-hover, #1f1f1f);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
   border-radius: 5px;
-  color: var(--fg, #e5e5e5);
+  color: var(--text-primary);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.12s;
 }
 
 .provider-card-btn:hover:not(:disabled) {
-  background: var(--bg-active, #2a2a2a);
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
 }
 
 .provider-card-btn:disabled {
@@ -6508,22 +6529,23 @@ button {
 }
 
 .provider-card-btn.primary {
-  background: var(--accent, #c42030);
-  border-color: var(--accent, #c42030);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
 .provider-card-btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover, #d92a3a);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .provider-card-btn.danger {
-  color: rgba(255, 140, 140, 0.85);
+  color: var(--danger-text);
 }
 
 .provider-card-btn.danger:hover:not(:disabled) {
-  color: #ff7676;
-  border-color: rgba(255, 118, 118, 0.35);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .provider-card-test {
@@ -6537,30 +6559,30 @@ button {
 }
 
 .provider-card-test.ok {
-  background: rgba(74, 222, 128, 0.08);
-  color: #4ade80;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .provider-card-test.fail {
-  background: rgba(196, 32, 48, 0.08);
-  color: #ff7676;
+  background: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 .provider-card-error {
   margin-top: 4px;
   padding: 5px 10px;
-  background: rgba(196, 32, 48, 0.08);
+  background: var(--danger-bg);
   border-radius: 4px;
-  color: #ff7676;
+  color: var(--danger-text);
   font-size: 11px;
 }
 
 .provider-card-fallback {
   padding: 8px 10px;
-  background: rgba(200, 160, 40, 0.06);
-  border: 1px dashed rgba(200, 160, 40, 0.3);
+  background: var(--warning-bg);
+  border: 1px dashed var(--warning);
   border-radius: 5px;
-  color: rgba(224, 192, 96, 0.85);
+  color: var(--warning-text);
   font-size: 11px;
   font-family: ui-monospace, Menlo, monospace;
 }
