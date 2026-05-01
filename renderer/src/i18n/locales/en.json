@@ -20,6 +20,7 @@
       "agents": "Agents",
       "providers": "Providers",
       "models": "Models",
+      "mcp": "MCP",
       "appearance": "Appearance",
       "shortcuts": "Shortcuts",
       "advanced": "Advanced",
@@ -412,7 +413,64 @@
     "placeholder": "{\n  \"figma\": {\n    \"command\": \"npx\",\n    \"args\": [\"-y\", \"figma-developer-mcp\"],\n    \"env\": { \"FIGMA_TOKEN\": \"your-token\" }\n  }\n}",
     "jsonError": "Invalid JSON. Please check the format.",
     "connectedCount": "{{count}} server connected",
-    "connectedCount_other": "{{count}} servers connected"
+    "connectedCount_other": "{{count}} servers connected",
+    "global": {
+      "title": "Global MCP Servers",
+      "desc": "Servers defined here are available to every agent unless an agent disables them.",
+      "addServer": "Add server",
+      "noServers": "No global MCP servers configured.",
+      "editServer": "Edit",
+      "deleteServer": "Delete",
+      "confirmDelete": "Delete \"{{name}}\" from the global registry? Agents that don't override this server will lose access.",
+      "transport": {
+        "stdio": "stdio",
+        "http": "HTTP",
+        "sse": "SSE"
+      }
+    },
+    "edit": {
+      "newTitle": "Add MCP Server",
+      "editTitle": "Edit MCP Server",
+      "name": "Name",
+      "namePlaceholder": "e.g. figma",
+      "nameHint": "Lowercase, no spaces — used as the server identifier.",
+      "transport": "Transport",
+      "command": "Command",
+      "commandPlaceholder": "npx",
+      "args": "Args (one per line)",
+      "env": "Environment Variables",
+      "envKeyPlaceholder": "FIGMA_TOKEN",
+      "envValuePlaceholder": "your-token",
+      "url": "URL",
+      "urlPlaceholder": "https://mcp.example.com/mcp",
+      "headers": "Headers",
+      "headerKeyPlaceholder": "Authorization",
+      "headerValuePlaceholder": "Bearer …",
+      "addEnv": "Add",
+      "addHeader": "Add",
+      "advanced": "Advanced (OAuth)",
+      "errors": {
+        "nameRequired": "Name is required",
+        "nameInvalid": "Name must be lowercase letters, numbers, hyphens",
+        "commandRequired": "Command is required for stdio servers",
+        "urlRequired": "URL is required for HTTP servers",
+        "urlMustBeHttps": "OAuth servers require https://"
+      }
+    }
+  },
+  "agentMcp": {
+    "title": "MCP Servers for this agent",
+    "desc": "Toggle which servers and tools this agent can use. Global servers are inherited.",
+    "globalBadge": "global",
+    "localBadge": "local",
+    "override": "Override",
+    "editLocal": "Edit",
+    "delete": "Remove override",
+    "addLocal": "Add agent-only server",
+    "tools": "Tools",
+    "toolsLoading": "Loading tools…",
+    "toolsUnavailable": "Could not list tools — check server is reachable.",
+    "noEffectiveServers": "No MCP servers available. Add one in Settings → MCP."
   },
   "mcpValidation": {
     "title": "MCP Server Validation",

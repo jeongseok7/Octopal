@@ -491,18 +491,23 @@ pub async fn send_message(
         "--no-session-persistence".to_string(),
     ];
 
-    // MCP config — always include, even if empty (matches Electron behavior)
-    let mcp_config = if let Some(mcp) = octo_content.get("mcpServers") {
-        if mcp.is_object() && !mcp.as_object().unwrap().is_empty() {
-            serde_json::json!({ "mcpServers": mcp })
-        } else {
-            serde_json::json!({ "mcpServers": {} })
-        }
-    } else {
-        serde_json::json!({ "mcpServers": {} })
+    // MCP config — merge global + per-agent overlay. Falls back to the
+    // legacy `mcpServers` blob when neither global nor new-shape `mcp` are
+    // populated. Always emit `--mcp-config` even if effective set is empty
+    // (matches prior Electron behavior).
+    let resolved = {
+        let settings = state.settings.lock().map_err(|e| e.to_string())?;
+        let agent_mcp_value = octo_content.get("mcp");
+        let agent_mcp: Option<crate::commands::mcp_config::AgentMcp> =
+            agent_mcp_value.and_then(|v| serde_json::from_value(v.clone()).ok());
+        crate::commands::mcp_config::resolve_effective_mcp_config(
+            &settings.mcp,
+            agent_mcp.as_ref(),
+            octo_content.get("mcpServers"),
+        )
     };
     claude_args.push("--mcp-config".to_string());
-    claude_args.push(mcp_config.to_string());
+    claude_args.push(resolved.mcp_config.to_string());
 
     // Model — extract settings values in a block to avoid holding MutexGuard across await.
     // The chosen alias is then passed through `resolve_model_for_cli`, which
@@ -591,6 +596,16 @@ pub async fn send_message(
                 claude_args.push("WebFetch".to_string());
             }
         }
+    }
+
+    // Per-agent MCP tool disables — emit one `--disallowed-tools` pair per
+    // disabled tool. Format `mcp__<server>__<tool>` is the Claude CLI's
+    // canonical name for tools exposed by an MCP server. `--disallowed-tools`
+    // works without `--dangerously-skip-permissions`, so this lives outside
+    // the `has_active_perms` guard.
+    for tool_name in &resolved.disallowed_mcp_tools {
+        claude_args.push("--disallowed-tools".to_string());
+        claude_args.push(tool_name.clone());
     }
 
     // Capabilities info

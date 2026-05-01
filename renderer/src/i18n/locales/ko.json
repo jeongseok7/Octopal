@@ -20,6 +20,7 @@
       "agents": "에이전트",
       "providers": "프로바이더",
       "models": "모델",
+      "mcp": "MCP",
       "appearance": "외관",
       "shortcuts": "단축키",
       "advanced": "고급",
@@ -412,7 +413,64 @@
     "placeholder": "{\n  \"figma\": {\n    \"command\": \"npx\",\n    \"args\": [\"-y\", \"figma-developer-mcp\"],\n    \"env\": { \"FIGMA_TOKEN\": \"your-token\" }\n  }\n}",
     "jsonError": "잘못된 JSON 형식입니다. 형식을 확인해주세요.",
     "connectedCount": "서버 {{count}}개 연결됨",
-    "connectedCount_other": "서버 {{count}}개 연결됨"
+    "connectedCount_other": "서버 {{count}}개 연결됨",
+    "global": {
+      "title": "전역 MCP 서버",
+      "desc": "여기에 등록한 서버는 에이전트가 비활성화하지 않는 한 모든 에이전트에서 사용할 수 있습니다.",
+      "addServer": "서버 추가",
+      "noServers": "등록된 전역 MCP 서버가 없습니다.",
+      "editServer": "편집",
+      "deleteServer": "삭제",
+      "confirmDelete": "전역 레지스트리에서 \"{{name}}\"을(를) 삭제할까요? 이 서버를 재정의하지 않은 에이전트는 접근 권한을 잃습니다.",
+      "transport": {
+        "stdio": "stdio",
+        "http": "HTTP",
+        "sse": "SSE"
+      }
+    },
+    "edit": {
+      "newTitle": "MCP 서버 추가",
+      "editTitle": "MCP 서버 편집",
+      "name": "이름",
+      "namePlaceholder": "예: figma",
+      "nameHint": "소문자, 공백 없이 — 서버 식별자로 사용됩니다.",
+      "transport": "전송 방식",
+      "command": "명령",
+      "commandPlaceholder": "npx",
+      "args": "인자 (한 줄에 하나)",
+      "env": "환경 변수",
+      "envKeyPlaceholder": "FIGMA_TOKEN",
+      "envValuePlaceholder": "your-token",
+      "url": "URL",
+      "urlPlaceholder": "https://mcp.example.com/mcp",
+      "headers": "헤더",
+      "headerKeyPlaceholder": "Authorization",
+      "headerValuePlaceholder": "Bearer …",
+      "addEnv": "추가",
+      "addHeader": "추가",
+      "advanced": "고급 (OAuth)",
+      "errors": {
+        "nameRequired": "이름을 입력해주세요",
+        "nameInvalid": "이름은 소문자, 숫자, 하이픈만 사용할 수 있습니다",
+        "commandRequired": "stdio 서버에는 명령이 필요합니다",
+        "urlRequired": "HTTP 서버에는 URL이 필요합니다",
+        "urlMustBeHttps": "OAuth 서버는 https://로 시작해야 합니다"
+      }
+    }
+  },
+  "agentMcp": {
+    "title": "이 에이전트의 MCP 서버",
+    "desc": "이 에이전트가 사용할 서버와 도구를 선택합니다. 전역 서버는 자동으로 상속됩니다.",
+    "globalBadge": "전역",
+    "localBadge": "로컬",
+    "override": "재정의",
+    "editLocal": "편집",
+    "delete": "재정의 제거",
+    "addLocal": "에이전트 전용 서버 추가",
+    "tools": "도구",
+    "toolsLoading": "도구 목록을 불러오는 중…",
+    "toolsUnavailable": "도구 목록을 가져올 수 없습니다 — 서버 연결을 확인하세요.",
+    "noEffectiveServers": "사용할 수 있는 MCP 서버가 없습니다. 설정 → MCP에서 추가하세요."
   },
   "mcpValidation": {
     "title": "MCP 서버 검증",

@@ -113,6 +113,7 @@ export function createTauriApi(): typeof window.api {
         color: params.color ?? null,
         permissions: params.permissions ?? null,
         mcpServers: params.mcpServers ?? null,
+        mcp: params.mcp ?? null,
       }),
     updateOcto: (params) =>
       invoke('update_octo', {
@@ -124,6 +125,7 @@ export function createTauriApi(): typeof window.api {
         color: params.color ?? null,
         permissions: params.permissions ?? null,
         mcpServers: params.mcpServers ?? null,
+        mcp: params.mcp ?? null,
       }),
     deleteOcto: (octoPath: string) => invoke('delete_octo', { octoPath }),
     readAgentPrompt: (octoPath: string) => invoke('read_agent_prompt', { octoPath }),

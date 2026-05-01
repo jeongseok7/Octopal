@@ -26,19 +26,21 @@ pub async fn save_settings(
     settings: AppSettings,
     state: State<'_, ManagedState>,
 ) -> Result<serde_json::Value, String> {
-    // Snapshot BEFORE the write so we can diff configured_providers flags.
+    // Snapshot BEFORE the write so we can diff configured_providers flags
+    // and the global MCP block.
     // Scope §4.4: keyring rotation (save_api_key_cmd / delete_api_key_cmd)
     // lands here via `settings.providers.configured_providers[provider]`
     // flip; this diff is what catches it.
-    let prev_configured = state
-        .settings
-        .lock()
-        .map_err(|e| e.to_string())?
-        .providers
-        .configured_providers
-        .clone();
+    let (prev_configured, prev_mcp_json) = {
+        let s = state.settings.lock().map_err(|e| e.to_string())?;
+        (
+            s.providers.configured_providers.clone(),
+            serde_json::to_string(&s.mcp).map_err(|e| e.to_string())?,
+        )
+    };
 
     let next_configured = settings.providers.configured_providers.clone();
+    let next_mcp_json = serde_json::to_string(&settings.mcp).map_err(|e| e.to_string())?;
 
     {
         let mut s = state.settings.lock().map_err(|e| e.to_string())?;
@@ -86,7 +88,23 @@ pub async fn save_settings(
         }
     }
 
-    Ok(serde_json::json!({ "ok": true, "invalidated": changed }))
+    // Conservative: any global MCP change invalidates ALL pool entries,
+    // since we don't track per-agent → per-server reverse indices. The
+    // legacy ProcessPool is per-message under `--no-session-persistence`
+    // so it self-heals; we only need to drain the goose ACP pool here.
+    let mcp_changed = prev_mcp_json != next_mcp_json;
+    if mcp_changed {
+        let killed = state.goose_acp_pool.shutdown_all(200).await;
+        eprintln!(
+            "[settings] global MCP changed → goose pool drained ({killed} sigkilled)"
+        );
+    }
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "invalidated": changed,
+        "mcpChanged": mcp_changed,
+    }))
 }
 
 #[tauri::command]

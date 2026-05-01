@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronDown, ChevronRight, Edit2, Plus } from 'lucide-react'
 import { EmojiPicker } from '../EmojiPicker'
 import { McpValidationModal } from './McpValidationModal'
+import { McpServerEditModal } from './McpServerEditModal'
 
 type AgentTab = 'basic' | 'prompt' | 'permissions' | 'mcp'
 
@@ -13,12 +15,12 @@ interface EditAgentModalProps {
   onDeleted: () => void
 }
 
-function formatMcpJson(mcpServers: McpServersConfig | null | undefined): string {
-  if (!mcpServers || Object.keys(mcpServers).length === 0) return ''
-  return JSON.stringify(mcpServers, null, 2)
+function transportOf(cfg: McpServerConfig): 'stdio' | 'http' | 'sse' {
+  if ('type' in cfg && cfg.type) return cfg.type
+  return 'stdio'
 }
 
-export function EditAgentModal({ agent, folderPath, onClose, onSaved, onDeleted }: EditAgentModalProps) {
+export function EditAgentModal({ agent, folderPath: _folderPath, onClose, onSaved, onDeleted }: EditAgentModalProps) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<AgentTab>('basic')
   const [name, setName] = useState(agent.name)
@@ -32,11 +34,58 @@ export function EditAgentModal({ agent, folderPath, onClose, onSaved, onDeleted 
   const [network, setNetwork] = useState(agent.permissions?.network === true)
   const [allowPaths, setAllowPaths] = useState((agent.permissions?.allowPaths || []).join(', '))
   const [denyPaths, setDenyPaths] = useState((agent.permissions?.denyPaths || []).join(', '))
-  const [mcpJson, setMcpJson] = useState(formatMcpJson(agent.mcpServers))
-  const [mcpError, setMcpError] = useState<string | null>(null)
+
+  // MCP state — hydrated from `agent.mcp` (new shape) when present, otherwise
+  // from `agent.mcpServers` (legacy blob).
+  const [globalServers, setGlobalServers] = useState<McpServersConfig>({})
+  const [agentServers, setAgentServers] = useState<McpServersConfig>(agent.mcp?.servers ?? {})
+  const [disabledServers, setDisabledServers] = useState<string[]>(agent.mcp?.disabledServers ?? [])
+  const [disabledTools, setDisabledTools] = useState<Record<string, string[]>>(agent.mcp?.disabledTools ?? {})
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
+  const [mcpEditTarget, setMcpEditTarget] = useState<
+    | { mode: 'add' }
+    | { mode: 'override'; name: string; cfg: McpServerConfig }
+    | { mode: 'edit-local'; name: string; cfg: McpServerConfig }
+    | null
+  >(null)
+
   const [error, setError] = useState<string | null>(null)
   const [showMcpValidation, setShowMcpValidation] = useState(false)
   const [pendingMcpServers, setPendingMcpServers] = useState<McpServersConfig | null>(null)
+
+  // Load global MCP registry once on mount.
+  useEffect(() => {
+    let cancelled = false
+    window.api.loadSettings().then((s) => {
+      if (cancelled) return
+      setGlobalServers(s.mcp?.servers ?? {})
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // If the agent only has the legacy blob (no `mcp.servers`), seed local
+  // overrides from it so editing keeps them visible until first save.
+  useEffect(() => {
+    if (!agent.mcp && agent.mcpServers && Object.keys(agentServers).length === 0) {
+      setAgentServers(agent.mcpServers as McpServersConfig)
+    }
+    // Eslint disable: we only want to run this once on mount for the legacy
+    // hydration branch — `agentServers` deliberately omitted from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const effective = useMemo<Record<string, { cfg: McpServerConfig; source: 'global' | 'local' }>>(() => {
+    const out: Record<string, { cfg: McpServerConfig; source: 'global' | 'local' }> = {}
+    for (const [n, c] of Object.entries(globalServers)) {
+      if (!disabledServers.includes(n)) out[n] = { cfg: c, source: 'global' }
+    }
+    for (const [n, c] of Object.entries(agentServers)) {
+      out[n] = { cfg: c, source: 'local' }
+    }
+    return out
+  }, [globalServers, agentServers, disabledServers])
 
   // Load prompt.md content on mount
   useEffect(() => {
@@ -48,19 +97,6 @@ export function EditAgentModal({ agent, folderPath, onClose, onSaved, onDeleted 
 
   const save = async () => {
     setError(null)
-    setMcpError(null)
-
-    // Parse & validate MCP config
-    let mcpServers: McpServersConfig | null = null
-    if (mcpJson.trim()) {
-      try {
-        mcpServers = JSON.parse(mcpJson.trim())
-      } catch {
-        setMcpError(t('mcp.jsonError'))
-        setTab('mcp')
-        return
-      }
-    }
 
     const permissions: OctoPermissions = {
       fileWrite,
@@ -75,6 +111,15 @@ export function EditAgentModal({ agent, folderPath, onClose, onSaved, onDeleted 
         .map((s) => s.trim())
         .filter(Boolean),
     }
+
+    const mcp: AgentMcp = {}
+    if (Object.keys(agentServers).length) mcp.servers = agentServers
+    if (disabledServers.length) mcp.disabledServers = disabledServers
+    const cleanedDisabledTools = Object.fromEntries(
+      Object.entries(disabledTools).filter(([, tools]) => tools.length > 0),
+    )
+    if (Object.keys(cleanedDisabledTools).length) mcp.disabledTools = cleanedDisabledTools
+
     const res = await window.api.updateOcto({
       octoPath: agent.path,
       name,
@@ -83,12 +128,19 @@ export function EditAgentModal({ agent, folderPath, onClose, onSaved, onDeleted 
       icon,
       color,
       permissions,
-      mcpServers,
+      // Clear the legacy blob on first save under the new shape — the resolver
+      // only consults it when `mcp` is fully empty, so dropping it is safe.
+      mcpServers: null,
+      mcp,
     })
     if (res.ok) {
-      // If MCP servers were configured, run validation
-      if (mcpServers && Object.keys(mcpServers).length > 0) {
-        setPendingMcpServers(mcpServers)
+      // Surface validation only for stdio servers (the validator is stdio-only).
+      const stdioOnly: McpServersConfig = {}
+      for (const [n, c] of Object.entries(agentServers)) {
+        if (transportOf(c) === 'stdio') stdioOnly[n] = c
+      }
+      if (Object.keys(stdioOnly).length > 0) {
+        setPendingMcpServers(stdioOnly)
         setShowMcpValidation(true)
       } else {
         onSaved()
@@ -243,18 +295,160 @@ export function EditAgentModal({ agent, folderPath, onClose, onSaved, onDeleted 
 
           {tab === 'mcp' && (
             <>
-              <label className="modal-label" style={{ marginTop: 0 }}>{t('mcp.title')}</label>
+              <label className="modal-label" style={{ marginTop: 0 }}>{t('agentMcp.title')}</label>
               <div className="modal-hint" style={{ marginTop: 0 }}>
-                {t('mcp.hint')}
+                {t('agentMcp.desc')}
               </div>
-              <textarea
-                className="modal-textarea modal-textarea--mono"
-                placeholder={t('mcp.placeholder')}
-                value={mcpJson}
-                onChange={(e) => { setMcpJson(e.target.value); setMcpError(null) }}
-                rows={8}
-              />
-              {mcpError && <div className="modal-error">{mcpError}</div>}
+
+              {Object.keys(effective).length === 0 ? (
+                <p className="settings-section-desc" style={{ fontStyle: 'italic', opacity: 0.6, marginTop: 12 }}>
+                  {t('agentMcp.noEffectiveServers')}
+                </p>
+              ) : null}
+
+              {/* Effective server list — global ∪ local, with toggles. */}
+              <div className="agent-mcp-list">
+                {Object.entries(effective).map(([sname, { cfg, source }]) => {
+                  const enabled = !disabledServers.includes(sname)
+                  const expanded = expandedTools.has(sname)
+                  const transport = transportOf(cfg)
+                  const tools = disabledTools[sname] ?? []
+                  return (
+                    <div key={sname} className="agent-mcp-row">
+                      <div className="agent-mcp-row-header">
+                        <label className="perm-toggle">
+                          <input
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setDisabledServers((s) => s.filter((n) => n !== sname))
+                              } else {
+                                setDisabledServers((s) =>
+                                  s.includes(sname) ? s : [...s, sname],
+                                )
+                              }
+                            }}
+                          />
+                          <span>{sname}</span>
+                        </label>
+                        <span className={`provider-card-status ${source === 'local' ? 'active' : 'inactive'}`}>
+                          <span className="provider-card-status-dot" />
+                          {source === 'global' ? t('agentMcp.globalBadge') : t('agentMcp.localBadge')}
+                        </span>
+                        <span className="provider-card-status inactive">
+                          {t(`mcp.global.transport.${transport}`)}
+                        </span>
+                        <button
+                          type="button"
+                          className="provider-card-icon-btn"
+                          onClick={() =>
+                            setExpandedTools((s) => {
+                              const next = new Set(s)
+                              if (next.has(sname)) next.delete(sname)
+                              else next.add(sname)
+                              return next
+                            })
+                          }
+                          aria-label={t('agentMcp.tools')}
+                        >
+                          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                        {source === 'global' ? (
+                          <button
+                            type="button"
+                            className="provider-card-btn"
+                            onClick={() =>
+                              setMcpEditTarget({ mode: 'override', name: sname, cfg })
+                            }
+                          >
+                            {t('agentMcp.override')}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="provider-card-btn"
+                            onClick={() =>
+                              setMcpEditTarget({ mode: 'edit-local', name: sname, cfg })
+                            }
+                            aria-label={t('agentMcp.editLocal')}
+                          >
+                            <Edit2 size={14} />
+                            {t('agentMcp.editLocal')}
+                          </button>
+                        )}
+                      </div>
+                      {expanded && (
+                        <div className="agent-mcp-tools">
+                          {tools.length === 0 ? (
+                            <p className="settings-section-desc" style={{ fontStyle: 'italic', opacity: 0.6 }}>
+                              {t('agentMcp.toolsUnavailable')}
+                            </p>
+                          ) : (
+                            tools.map((toolName) => (
+                              <label key={toolName} className="perm-toggle">
+                                <input
+                                  type="checkbox"
+                                  checked={false}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setDisabledTools((d) => {
+                                        const next = { ...d }
+                                        next[sname] = (next[sname] ?? []).filter((tn) => tn !== toolName)
+                                        if (next[sname].length === 0) delete next[sname]
+                                        return next
+                                      })
+                                    }
+                                  }}
+                                />
+                                <span>{toolName}</span>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="provider-card-btn primary"
+                  onClick={() => setMcpEditTarget({ mode: 'add' })}
+                >
+                  <Plus size={14} />
+                  {t('agentMcp.addLocal')}
+                </button>
+              </div>
+
+              {mcpEditTarget && (
+                <McpServerEditModal
+                  initialName={mcpEditTarget.mode === 'add' ? undefined : mcpEditTarget.name}
+                  initialConfig={mcpEditTarget.mode === 'add' ? null : mcpEditTarget.cfg}
+                  reservedNames={
+                    mcpEditTarget.mode === 'edit-local'
+                      ? Object.keys(agentServers).filter((n) => n !== mcpEditTarget.name)
+                      : Object.keys(agentServers)
+                  }
+                  onClose={() => setMcpEditTarget(null)}
+                  onSave={(n, cfg) => {
+                    setAgentServers((s) => {
+                      const next: McpServersConfig = { ...s }
+                      if (
+                        mcpEditTarget.mode === 'edit-local' &&
+                        mcpEditTarget.name !== n
+                      ) {
+                        delete next[mcpEditTarget.name]
+                      }
+                      next[n] = cfg
+                      return next
+                    })
+                    setMcpEditTarget(null)
+                  }}
+                />
+              )}
             </>
           )}
         </div>

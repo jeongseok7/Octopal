@@ -16,10 +16,12 @@ import {
   Download,
   Check,
   KeyRound,
+  Plug,
 } from 'lucide-react'
 import { ModelsTab } from './settings/ModelsTab'
+import { McpTab } from './settings/McpTab'
 
-type SettingsTab = 'general' | 'agents' | 'models' | 'appearance' | 'shortcuts' | 'advanced' | 'about'
+type SettingsTab = 'general' | 'agents' | 'models' | 'mcp' | 'appearance' | 'shortcuts' | 'advanced' | 'about'
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -60,6 +62,7 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
     { id: 'general', label: t('settings.tabs.general'), icon: Settings },
     { id: 'agents', label: t('settings.tabs.agents'), icon: Users },
     { id: 'models', label: t('settings.tabs.models'), icon: KeyRound },
+    { id: 'mcp', label: t('settings.tabs.mcp'), icon: Plug },
     { id: 'appearance', label: t('settings.tabs.appearance'), icon: Palette },
     { id: 'shortcuts', label: t('settings.tabs.shortcuts'), icon: Keyboard },
     { id: 'advanced', label: t('settings.tabs.advanced'), icon: Wrench },
@@ -424,6 +427,13 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
             bestOpusModel={bestOpusModel}
             onProvidersChange={(patch) => update('providers', patch)}
             onAdvancedChange={(patch) => update('advanced', patch)}
+          />
+        )}
+
+        {tab === 'mcp' && (
+          <McpTab
+            servers={settings.mcp?.servers ?? {}}
+            onChange={(servers) => update('mcp', { servers })}
           />
         )}
 

@@ -6,14 +6,43 @@ interface OctoPermissions {
   denyPaths?: string[]
 }
 
-interface McpServerConfig {
+type McpStdioServer = {
+  /** Optional — absent type defaults to stdio per Claude CLI docs. */
+  type?: 'stdio'
   command: string
   args?: string[]
   env?: Record<string, string>
 }
+type McpHttpServer = {
+  type: 'http'
+  url: string
+  headers?: Record<string, string>
+  oauth?: {
+    clientId?: string
+    authServerMetadataUrl?: string
+    scopes?: string
+    callbackPort?: number
+  }
+}
+type McpSseServer = {
+  type: 'sse'
+  url: string
+  headers?: Record<string, string>
+}
+type McpServerConfig = McpStdioServer | McpHttpServer | McpSseServer
 
 interface McpServersConfig {
   [serverName: string]: McpServerConfig
+}
+
+/** Per-agent MCP overlay block (post-overhaul shape). */
+interface AgentMcp {
+  /** Servers defined inline on this agent — overrides any global server with the same name. */
+  servers?: McpServersConfig
+  /** Global server names this agent has explicitly disabled. */
+  disabledServers?: string[]
+  /** Per-server disabled tool names. Tools not listed are enabled. */
+  disabledTools?: Record<string, string[]>
 }
 
 type McpStatus = 'ok' | 'error' | 'checking'
@@ -34,7 +63,11 @@ interface OctoFile {
    */
   isolated?: boolean
   permissions?: OctoPermissions | null
+  /** Legacy free-form MCP servers blob — kept for read-fallback. */
   mcpServers?: McpServersConfig | null
+  /** New per-agent MCP overlay (post-overhaul). When present, the resolver
+   * uses this instead of the legacy `mcpServers` blob. */
+  mcp?: AgentMcp | null
 }
 
 interface Workspace {
@@ -113,6 +146,11 @@ interface AppSettings {
      */
     configuredProviders?: Record<string, boolean>
   }
+  /** Global MCP server registry. Available to every agent unless the agent
+   * disables a specific server in its `mcp` overlay. */
+  mcp?: {
+    servers: McpServersConfig
+  }
 }
 
 interface ProviderAuthMethod {
@@ -183,7 +221,17 @@ interface Window {
     deleteConversation: (params: { folderPath: string; conversationId: string }) =>
       Promise<void>
 
-    createOcto: (params: { folderPath: string; name: string; role: string; prompt?: string; icon?: string; color?: string; permissions?: OctoPermissions; mcpServers?: McpServersConfig }) =>
+    createOcto: (params: {
+      folderPath: string
+      name: string
+      role: string
+      prompt?: string
+      icon?: string
+      color?: string
+      permissions?: OctoPermissions
+      mcpServers?: McpServersConfig
+      mcp?: AgentMcp
+    }) =>
       Promise<{ ok: true; path: string } | { ok: false; error: string }>
     updateOcto: (params: {
       octoPath: string
@@ -194,6 +242,7 @@ interface Window {
       color?: string
       permissions?: OctoPermissions
       mcpServers?: McpServersConfig | null
+      mcp?: AgentMcp | null
     }) => Promise<{ ok: true; path: string } | { ok: false; error: string }>
     deleteOcto: (octoPath: string) =>
       Promise<{ ok: true } | { ok: false; error: string }>
@@ -324,7 +373,7 @@ interface Window {
 
     // MCP Health Check & Install
     mcpHealthCheck: (params: {
-      mcpServers: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>
+      mcpServers: McpServersConfig
     }) => Promise<{
       ok: true
       results: Record<string, {
@@ -358,7 +407,7 @@ interface Window {
 
     // Settings
     loadSettings: () => Promise<AppSettings>
-    saveSettings: (settings: AppSettings) => Promise<{ ok: true; invalidated?: string[] }>
+    saveSettings: (settings: AppSettings) => Promise<{ ok: true; invalidated?: string[]; mcpChanged?: boolean }>
     getVersion: () => Promise<{ version: string; electron: string; node: string }>
 
     // Phase 4 — API keys (keyring-backed).

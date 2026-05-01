@@ -10,7 +10,7 @@ interface ServerResult {
 }
 
 interface McpValidationModalProps {
-  mcpServers: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>
+  mcpServers: McpServersConfig
   onClose: () => void
   onDone: () => void
 }
