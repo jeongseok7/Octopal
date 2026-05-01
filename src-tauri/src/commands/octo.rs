@@ -79,6 +79,7 @@ pub fn create_octo(
     color: Option<String>,
     permissions: Option<serde_json::Value>,
     mcp_servers: Option<serde_json::Value>,
+    mcp: Option<serde_json::Value>,
 ) -> CreateResult {
     let sanitized_name = name
         .chars()
@@ -136,6 +137,9 @@ pub fn create_octo(
     if let Some(m) = mcp_servers {
         octo["mcpServers"] = m;
     }
+    if let Some(m) = mcp {
+        octo["mcp"] = m;
+    }
 
     // Write agent config.json
     match fs::write(&config_path, serde_json::to_string_pretty(&octo).unwrap()) {
@@ -170,6 +174,7 @@ pub fn update_octo(
     color: Option<String>,
     permissions: Option<serde_json::Value>,
     mcp_servers: Option<serde_json::Value>,
+    mcp: Option<serde_json::Value>,
 ) -> CreateResult {
     let path = Path::new(&octo_path);
     if !path.exists() {
@@ -223,6 +228,14 @@ pub fn update_octo(
             octo.as_object_mut().map(|o| o.remove("mcpServers"));
         } else {
             octo["mcpServers"] = m;
+        }
+    }
+    // New-shape mcp block — same null-clears semantics as mcp_servers.
+    if let Some(m) = mcp {
+        if m.is_null() {
+            octo.as_object_mut().map(|o| o.remove("mcp"));
+        } else {
+            octo["mcp"] = m;
         }
     }
 

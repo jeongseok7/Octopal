@@ -56,6 +56,11 @@ pub struct OctoFile {
     /// Alias resolution happens at spawn time via `commands::model_alias`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// New (post-MCP-overhaul) per-agent MCP overlay. When present, this
+    /// REPLACES the legacy `mcpServers` blob as the source for the spawn
+    /// path. Legacy field is kept for read-fallback only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<crate::commands::mcp_config::AgentMcp>,
 }
 
 fn default_icon() -> String {
@@ -126,6 +131,11 @@ pub struct AppSettings {
     pub backup: BackupSettings,
     #[serde(default)]
     pub providers: ProvidersSettings,
+    /// Global MCP server registry. Available to every agent unless that
+    /// agent disables a specific server in its `mcp` overlay. Empty by
+    /// default — legacy settings.json files round-trip cleanly.
+    #[serde(default)]
+    pub mcp: crate::commands::mcp_config::GlobalMcp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -332,6 +342,7 @@ impl Default for AppSettings {
             version_control: VersionControlSettings { auto_commit: true },
             backup: BackupSettings::default(),
             providers: ProvidersSettings::default(),
+            mcp: crate::commands::mcp_config::GlobalMcp::default(),
         }
     }
 }
@@ -505,6 +516,7 @@ mod migration_tests {
             mcp_servers: None,
             provider: Some("anthropic".into()),
             model: Some("opus".into()),
+            mcp: None,
         };
         let s = serde_json::to_string(&original).unwrap();
         let back: OctoFile = serde_json::from_str(&s).unwrap();
@@ -529,6 +541,7 @@ mod migration_tests {
             mcp_servers: None,
             provider: None,
             model: None,
+            mcp: None,
         };
         let s = serde_json::to_string(&f).unwrap();
         assert!(!s.contains("\"provider\""), "provider should be skipped: {s}");
@@ -600,6 +613,62 @@ mod migration_tests {
         let s: AppSettings = serde_json::from_str(json).unwrap();
         assert_eq!(s.providers.use_legacy_claude_cli, true);
         assert_eq!(s.providers.default_provider, "anthropic");
+    }
+
+    #[test]
+    fn legacy_octo_file_with_only_mcp_servers_deserializes() {
+        // Pre-MCP-overhaul shape — legacy `mcpServers` only, no `mcp` field.
+        let json = r#"{
+            "path": "/tmp/foo.octo",
+            "name": "foo", "role": "x", "icon": "🤖",
+            "color": null, "hidden": null, "permissions": null,
+            "mcpServers": {"figma": {"command": "npx"}}
+        }"#;
+        let f: OctoFile = serde_json::from_str(json).unwrap();
+        assert!(f.mcp.is_none());
+        assert!(f.mcp_servers.is_some());
+    }
+
+    #[test]
+    fn octo_file_with_new_mcp_block_roundtrips() {
+        use crate::commands::mcp_config::AgentMcp;
+        let mut a = AgentMcp::default();
+        a.disabled_servers.push("stripe".to_string());
+        let original = OctoFile {
+            path: "/tmp/foo.octo".into(),
+            name: "foo".into(),
+            role: "x".into(),
+            icon: "🤖".into(),
+            color: None,
+            hidden: None,
+            isolated: None,
+            permissions: None,
+            mcp_servers: None,
+            provider: None,
+            model: None,
+            mcp: Some(a),
+        };
+        let s = serde_json::to_string(&original).unwrap();
+        let back: OctoFile = serde_json::from_str(&s).unwrap();
+        assert_eq!(
+            back.mcp.unwrap().disabled_servers,
+            vec!["stripe".to_string()]
+        );
+    }
+
+    #[test]
+    fn legacy_settings_without_mcp_block_deserializes_with_default() {
+        let json = r#"{
+            "general": {"restoreLastWorkspace": true, "launchAtLogin": false, "language": "en"},
+            "agents": {"defaultPermissions": {"fileWrite": false, "bash": false, "network": false}},
+            "appearance": {"chatFontSize": 14},
+            "shortcuts": {"textExpansions": []},
+            "advanced": {"defaultAgentModel": "opus", "autoModelSelection": false},
+            "versionControl": {"autoCommit": true},
+            "providers": {"useLegacyClaudeCli": true}
+        }"#;
+        let s: AppSettings = serde_json::from_str(json).unwrap();
+        assert!(s.mcp.servers.is_empty());
     }
 
     #[test]

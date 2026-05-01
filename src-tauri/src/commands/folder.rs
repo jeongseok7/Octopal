@@ -436,6 +436,9 @@ fn parse_agent_config(path: &Path) -> Option<OctoFile> {
         .get("model")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    let mcp = octo
+        .get("mcp")
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
 
     Some(OctoFile {
         path: path.to_string_lossy().to_string(),
@@ -449,6 +452,7 @@ fn parse_agent_config(path: &Path) -> Option<OctoFile> {
         mcp_servers,
         provider,
         model,
+        mcp,
     })
 }
 
@@ -486,6 +490,7 @@ pub fn list_octos(
             "General assistant. Scans the project, answers questions, and helps with tasks.".to_string(),
             None,
             Some("🐙".to_string()),
+            None,
             None,
             None,
             None,
