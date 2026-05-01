@@ -157,10 +157,28 @@ pub struct AppearanceSettings {
     pub chat_font_size: u32,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(rename = "interfaceFont", default = "default_interface_font")]
+    pub interface_font: String,
+    #[serde(rename = "chatFont", default = "default_chat_font")]
+    pub chat_font: String,
+    #[serde(rename = "codeBlockFont", default = "default_code_block_font")]
+    pub code_block_font: String,
 }
 
 fn default_theme() -> String {
     "system".to_string()
+}
+
+fn default_interface_font() -> String {
+    "system".to_string()
+}
+
+fn default_chat_font() -> String {
+    "system".to_string()
+}
+
+fn default_code_block_font() -> String {
+    "sf-mono".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -308,6 +326,9 @@ impl Default for AppSettings {
             appearance: AppearanceSettings {
                 chat_font_size: 14,
                 theme: default_theme(),
+                interface_font: default_interface_font(),
+                chat_font: default_chat_font(),
+                code_block_font: default_code_block_font(),
             },
             shortcuts: ShortcutSettings {
                 text_expansions: vec![],
@@ -559,6 +580,28 @@ mod migration_tests {
         let s: AppSettings = serde_json::from_str(json).unwrap();
         assert_eq!(s.providers.use_legacy_claude_cli, true);
         assert_eq!(s.providers.default_provider, "anthropic");
+    }
+
+    #[test]
+    fn legacy_settings_without_font_fields_deserializes_with_defaults() {
+        // Pre-font-customization settings.json — only chatFontSize + theme in
+        // appearance. Existing users must keep their settings on upgrade.
+        let json = r#"{
+            "general": {"restoreLastWorkspace": true, "launchAtLogin": false, "language": "en"},
+            "agents": {"defaultPermissions": {"fileWrite": false, "bash": false, "network": false}},
+            "appearance": {"chatFontSize": 16, "theme": "dark"},
+            "shortcuts": {"textExpansions": []},
+            "advanced": {"defaultAgentModel": "opus", "autoModelSelection": false},
+            "versionControl": {"autoCommit": true},
+            "backup": {"maxBackupsPerWorkspace": 50, "maxAgeDays": 7},
+            "providers": {"useLegacyClaudeCli": true}
+        }"#;
+        let s: AppSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(s.appearance.chat_font_size, 16);
+        assert_eq!(s.appearance.theme, "dark");
+        assert_eq!(s.appearance.interface_font, "system");
+        assert_eq!(s.appearance.chat_font, "system");
+        assert_eq!(s.appearance.code_block_font, "sf-mono");
     }
 
     #[test]

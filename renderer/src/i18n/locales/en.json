@@ -54,7 +54,30 @@
       "themeSystem": "System",
       "themeLight": "Light",
       "themeDark": "Dark",
-      "chatFontSize": "Chat Font Size"
+      "chatFontSize": "Chat Font Size",
+      "interfaceFont": "Interface font",
+      "interfaceFontDesc": "Used throughout the app UI",
+      "chatFont": "Chat font",
+      "chatFontDesc": "Used for chat message bodies",
+      "codeBlockFont": "Code block font",
+      "codeBlockFontDesc": "Used for code snippets and inline code",
+      "fontPreview": "The quick brown fox jumps",
+      "fonts": {
+        "system": "System Default",
+        "systemSans": "System Sans",
+        "outfit": "Outfit",
+        "pretendard": "Pretendard",
+        "inter": "Inter",
+        "helvetica": "Helvetica",
+        "arial": "Arial",
+        "serif": "Serif (Georgia)",
+        "sfMono": "SF Mono",
+        "menlo": "Menlo",
+        "consolas": "Consolas",
+        "jetbrainsMono": "JetBrains Mono",
+        "firaCode": "Fira Code",
+        "courier": "Courier New"
+      }
     },
     "shortcuts": {
       "title": "Shortcuts",

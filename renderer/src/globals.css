@@ -254,6 +254,11 @@
   --font-base: 14px;
   --font-lg: 18px;
 
+  /* Font families (overridden at runtime via JS) */
+  --ui-font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  --chat-font-family: inherit;
+  --code-font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+
   /* Transition */
   --transition: 0.15s ease;
 }
@@ -333,7 +338,7 @@ html,
 body,
 #root {
   height: 100%;
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  font-family: var(--ui-font-family);
   font-size: var(--font-base);
   color: var(--text-primary);
   background: var(--bg-base);
@@ -348,20 +353,14 @@ button,
 input,
 textarea,
 select {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+  font-family: var(--ui-font-family);
 }
 
-/* Korean locale: use Pretendard as primary font */
-html[lang='ko'],
-html[lang='ko'] body,
-html[lang='ko'] #root {
-  font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
-}
-html[lang='ko'] button,
-html[lang='ko'] input,
-html[lang='ko'] textarea,
-html[lang='ko'] select {
-  font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
+/* Korean locale: default to Pretendard via the UI font variable. JS-set
+   inline styles on documentElement override this, letting an explicit user
+   font choice win over the locale default. */
+html[lang='ko'] {
+  --ui-font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Tossface';
 }
 
 button {
@@ -2811,7 +2810,8 @@ button {
 }
 
 .bubble-text {
-  font-size: var(--font-base);
+  font-size: var(--chat-font-size, var(--font-base));
+  font-family: var(--chat-font-family, inherit);
   line-height: 1.5;
   word-wrap: break-word;
   white-space: pre-wrap;
@@ -2932,7 +2932,7 @@ button {
   background: rgba(255, 255, 255, 0.08);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--code-font-family);
   font-size: 0.9em;
   color: #e5a0ff;
   white-space: pre-wrap;
@@ -2947,7 +2947,7 @@ button {
   padding: 12px 14px;
   margin: 0.5em 0;
   overflow-x: auto;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-family: var(--code-font-family);
   font-size: 0.85em;
   line-height: 1.5;
 }

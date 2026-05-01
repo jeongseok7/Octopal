@@ -54,7 +54,30 @@
       "themeSystem": "시스템",
       "themeLight": "라이트",
       "themeDark": "다크",
-      "chatFontSize": "채팅 글꼴 크기"
+      "chatFontSize": "채팅 글꼴 크기",
+      "interfaceFont": "인터페이스 글꼴",
+      "interfaceFontDesc": "앱 UI 전반에 사용됩니다",
+      "chatFont": "채팅 글꼴",
+      "chatFontDesc": "채팅 메시지 본문에 사용됩니다",
+      "codeBlockFont": "코드 블록 글꼴",
+      "codeBlockFontDesc": "코드 스니펫과 인라인 코드에 사용됩니다",
+      "fontPreview": "다람쥐가 스무 마리 도토리를 줍는다",
+      "fonts": {
+        "system": "시스템 기본값",
+        "systemSans": "시스템 산세리프",
+        "outfit": "Outfit",
+        "pretendard": "프리텐다드",
+        "inter": "Inter",
+        "helvetica": "Helvetica",
+        "arial": "Arial",
+        "serif": "세리프 (Georgia)",
+        "sfMono": "SF Mono",
+        "menlo": "Menlo",
+        "consolas": "Consolas",
+        "jetbrainsMono": "JetBrains Mono",
+        "firaCode": "Fira Code",
+        "courier": "Courier New"
+      }
     },
     "shortcuts": {
       "title": "단축어",

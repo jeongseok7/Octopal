@@ -18,6 +18,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 import { ModelsTab } from './settings/ModelsTab'
+import { CHAT_FONTS, CODE_FONTS, INTERFACE_FONTS, getFontStack } from './settings/fonts'
 
 type SettingsTab = 'general' | 'agents' | 'models' | 'appearance' | 'shortcuts' | 'advanced' | 'about'
 
@@ -234,10 +235,22 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
     setSaving(true)
     await window.api.saveSettings(settings)
 
-    // Apply font size to document
+    // Apply font size + families to document
     document.documentElement.style.setProperty(
       '--chat-font-size',
       `${settings.appearance.chatFontSize}px`
+    )
+    document.documentElement.style.setProperty(
+      '--ui-font-family',
+      getFontStack(settings.appearance.interfaceFont, 'ui')
+    )
+    document.documentElement.style.setProperty(
+      '--chat-font-family',
+      getFontStack(settings.appearance.chatFont, 'chat')
+    )
+    document.documentElement.style.setProperty(
+      '--code-font-family',
+      getFontStack(settings.appearance.codeBlockFont, 'code')
     )
 
     setSaving(false)
@@ -477,6 +490,78 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
                 <span className="settings-slider-label settings-slider-label--lg">A</span>
                 <span className="settings-slider-value">
                   {settings.appearance.chatFontSize}px
+                </span>
+              </div>
+            </div>
+
+            <div className="settings-field">
+              <span className="settings-toggle-info">
+                <span className="settings-label">{t('settings.appearance.interfaceFont')}</span>
+                <span className="settings-desc">{t('settings.appearance.interfaceFontDesc')}</span>
+              </span>
+              <div className="settings-font-picker">
+                <select
+                  className="settings-select"
+                  value={settings.appearance.interfaceFont}
+                  onChange={(e) => update('appearance', { interfaceFont: e.target.value })}
+                >
+                  {INTERFACE_FONTS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{t(opt.labelKey)}</option>
+                  ))}
+                </select>
+                <span
+                  className="settings-font-preview"
+                  style={{ fontFamily: getFontStack(settings.appearance.interfaceFont, 'ui') }}
+                >
+                  {t('settings.appearance.fontPreview')}
+                </span>
+              </div>
+            </div>
+
+            <div className="settings-field">
+              <span className="settings-toggle-info">
+                <span className="settings-label">{t('settings.appearance.chatFont')}</span>
+                <span className="settings-desc">{t('settings.appearance.chatFontDesc')}</span>
+              </span>
+              <div className="settings-font-picker">
+                <select
+                  className="settings-select"
+                  value={settings.appearance.chatFont}
+                  onChange={(e) => update('appearance', { chatFont: e.target.value })}
+                >
+                  {CHAT_FONTS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{t(opt.labelKey)}</option>
+                  ))}
+                </select>
+                <span
+                  className="settings-font-preview"
+                  style={{ fontFamily: getFontStack(settings.appearance.chatFont, 'chat') }}
+                >
+                  {t('settings.appearance.fontPreview')}
+                </span>
+              </div>
+            </div>
+
+            <div className="settings-field">
+              <span className="settings-toggle-info">
+                <span className="settings-label">{t('settings.appearance.codeBlockFont')}</span>
+                <span className="settings-desc">{t('settings.appearance.codeBlockFontDesc')}</span>
+              </span>
+              <div className="settings-font-picker">
+                <select
+                  className="settings-select"
+                  value={settings.appearance.codeBlockFont}
+                  onChange={(e) => update('appearance', { codeBlockFont: e.target.value })}
+                >
+                  {CODE_FONTS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{t(opt.labelKey)}</option>
+                  ))}
+                </select>
+                <span
+                  className="settings-font-preview"
+                  style={{ fontFamily: getFontStack(settings.appearance.codeBlockFont, 'code') }}
+                >
+                  {t('settings.appearance.fontPreview')}
                 </span>
               </div>
             </div>

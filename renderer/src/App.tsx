@@ -21,6 +21,7 @@ import { TaskBoard } from './components/TaskBoard'
 import { ToastContainer, showToast } from './components/Toast'
 import { expandShortcut } from './shortcut-expander'
 import { convKey, sortConversations } from './components/Conversations/conversation-helpers'
+import { getFontStack } from './components/settings/fonts'
 
 /** Race a promise against a timeout. Rejects with a descriptive error if ms elapses. */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -186,6 +187,30 @@ export function App() {
       const saved = settings.appearance?.theme
       if (saved === 'dark' || saved === 'light' || saved === 'system') {
         setTheme(saved)
+      }
+      // Apply persisted font selections (and chat-font-size, which previously
+      // only landed on Save) to documentElement so they take effect on first
+      // paint after boot.
+      const ap = settings.appearance
+      if (ap) {
+        if (typeof ap.chatFontSize === 'number') {
+          document.documentElement.style.setProperty(
+            '--chat-font-size',
+            `${ap.chatFontSize}px`
+          )
+        }
+        document.documentElement.style.setProperty(
+          '--ui-font-family',
+          getFontStack(ap.interfaceFont ?? 'system', 'ui')
+        )
+        document.documentElement.style.setProperty(
+          '--chat-font-family',
+          getFontStack(ap.chatFont ?? 'system', 'chat')
+        )
+        document.documentElement.style.setProperty(
+          '--code-font-family',
+          getFontStack(ap.codeBlockFont ?? 'sf-mono', 'code')
+        )
       }
     })
     window.api.loadState().then(async (s) => {
