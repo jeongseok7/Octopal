@@ -18,6 +18,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 import { ModelsTab } from './settings/ModelsTab'
+import { AppearanceFontSelector, stackFor } from './settings/AppearanceFontSelector'
 
 type SettingsTab = 'general' | 'agents' | 'models' | 'appearance' | 'shortcuts' | 'advanced' | 'about'
 
@@ -239,6 +240,12 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
       '--chat-font-size',
       `${settings.appearance.chatFontSize}px`
     )
+
+    // Apply font families to document. Empty string for "system" reverts to :root default.
+    const root = document.documentElement
+    root.style.setProperty('--font-ui', stackFor('ui', settings.appearance.uiFont))
+    root.style.setProperty('--font-chat', stackFor('chat', settings.appearance.chatFont))
+    root.style.setProperty('--font-mono', stackFor('code', settings.appearance.codeFont))
 
     setSaving(false)
     setDirty(false)
@@ -480,6 +487,26 @@ export function SettingsPanel({ onSettingsSaved }: SettingsPanelProps = {}) {
                 </span>
               </div>
             </div>
+
+            <h4 className="settings-section-title" style={{ marginTop: 20, fontSize: 14 }}>
+              {t('settings.appearance.fontsTitle')}
+            </h4>
+
+            <AppearanceFontSelector
+              kind="ui"
+              value={settings.appearance.uiFont}
+              onChange={(next) => update('appearance', { uiFont: next })}
+            />
+            <AppearanceFontSelector
+              kind="chat"
+              value={settings.appearance.chatFont}
+              onChange={(next) => update('appearance', { chatFont: next })}
+            />
+            <AppearanceFontSelector
+              kind="code"
+              value={settings.appearance.codeFont}
+              onChange={(next) => update('appearance', { codeFont: next })}
+            />
           </div>
         )}
 

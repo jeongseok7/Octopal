@@ -21,6 +21,7 @@ import { TaskBoard } from './components/TaskBoard'
 import { ToastContainer, showToast } from './components/Toast'
 import { expandShortcut } from './shortcut-expander'
 import { convKey, sortConversations } from './components/Conversations/conversation-helpers'
+import { stackFor } from './components/settings/AppearanceFontSelector'
 
 /** Race a promise against a timeout. Rejects with a descriptive error if ms elapses. */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -187,6 +188,10 @@ export function App() {
       if (saved === 'dark' || saved === 'light' || saved === 'system') {
         setTheme(saved)
       }
+      const root = document.documentElement
+      root.style.setProperty('--font-ui', stackFor('ui', settings.appearance?.uiFont ?? 'system'))
+      root.style.setProperty('--font-chat', stackFor('chat', settings.appearance?.chatFont ?? 'system'))
+      root.style.setProperty('--font-mono', stackFor('code', settings.appearance?.codeFont ?? 'system'))
     })
     window.api.loadState().then(async (s) => {
       if (s.workspaces.length === 0) {

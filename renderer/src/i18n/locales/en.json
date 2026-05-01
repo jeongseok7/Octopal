@@ -54,7 +54,17 @@
       "themeSystem": "System",
       "themeLight": "Light",
       "themeDark": "Dark",
-      "chatFontSize": "Chat Font Size"
+      "chatFontSize": "Chat Font Size",
+      "fontsTitle": "Fonts",
+      "interfaceFont": "Interface font",
+      "interfaceFontDesc": "Used for sidebars, buttons, menus, and other UI chrome.",
+      "chatFont": "Chat font",
+      "chatFontDesc": "Used for message content and markdown body text.",
+      "codeFont": "Code font",
+      "codeFontDesc": "Used for inline code and fenced code blocks.",
+      "fontPreview": "The quick brown fox jumps over the lazy dog.",
+      "fontPreviewCode": "const greet = (name) => `Hello, ${name}!`",
+      "fontSystemDefault": "System Default"
     },
     "shortcuts": {
       "title": "Shortcuts",

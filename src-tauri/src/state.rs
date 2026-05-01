@@ -157,9 +157,19 @@ pub struct AppearanceSettings {
     pub chat_font_size: u32,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(rename = "uiFont", default = "default_font_choice")]
+    pub ui_font: String,
+    #[serde(rename = "chatFont", default = "default_font_choice")]
+    pub chat_font: String,
+    #[serde(rename = "codeFont", default = "default_font_choice")]
+    pub code_font: String,
 }
 
 fn default_theme() -> String {
+    "system".to_string()
+}
+
+fn default_font_choice() -> String {
     "system".to_string()
 }
 
@@ -308,6 +318,9 @@ impl Default for AppSettings {
             appearance: AppearanceSettings {
                 chat_font_size: 14,
                 theme: default_theme(),
+                ui_font: default_font_choice(),
+                chat_font: default_font_choice(),
+                code_font: default_font_choice(),
             },
             shortcuts: ShortcutSettings {
                 text_expansions: vec![],
