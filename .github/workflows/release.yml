@@ -17,6 +17,7 @@ jobs:
         include:
           - platform: macos-latest
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            goose-targets: aarch64-apple-darwin x86_64-apple-darwin
             tauri-args: --target universal-apple-darwin
             bundle-root: src-tauri/target/universal-apple-darwin/release/bundle
             artifact-glob: |
@@ -25,6 +26,7 @@ jobs:
               src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
           - platform: windows-latest
             rust-targets: ''
+            goose-targets: x86_64-pc-windows-msvc
             tauri-args: ''
             bundle-root: src-tauri/target/release/bundle
             artifact-glob: |
@@ -64,6 +66,19 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Cache Goose sidecar archives
+        uses: actions/cache@v4
+        with:
+          path: scripts/.cache/goose
+          key: goose-${{ runner.os }}-${{ hashFiles('scripts/goose-version.json') }}
+
+      - name: Prepare Goose sidecars
+        shell: bash
+        run: |
+          for triple in ${{ matrix.goose-targets }}; do
+            node scripts/ensure-goose-sidecar.mjs "$triple"
+          done
 
       - name: Build Tauri app
         env:
