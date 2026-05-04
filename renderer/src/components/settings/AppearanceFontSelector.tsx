@@ -68,11 +68,15 @@ export function stackFor(kind: FontKind, value: string): string {
 // string 'inherit', silently breaking the Korean Pretendard cascade.
 export function applyFontVars(
   root: HTMLElement,
-  appearance: { uiFont?: string; chatFont?: string; codeFont?: string } | undefined
+  appearance:
+    | { uiFont?: string; chatFont?: string; codeFont?: string; chatFontSize?: number }
+    | undefined
 ): void {
   root.style.setProperty('--font-ui', stackFor('ui', appearance?.uiFont ?? 'system'))
   root.style.setProperty('--font-chat', stackFor('chat', appearance?.chatFont ?? 'system'))
   root.style.setProperty('--font-mono', stackFor('code', appearance?.codeFont ?? 'system'))
+  const size = appearance?.chatFontSize
+  root.style.setProperty('--chat-font-size', typeof size === 'number' ? `${size}px` : '')
 }
 
 interface Props {

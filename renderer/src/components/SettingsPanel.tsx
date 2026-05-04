@@ -244,12 +244,6 @@ export function SettingsPanel({ onSettingsSaved, activeFolder }: SettingsPanelPr
     try {
       await window.api.saveSettings(settings)
 
-      // Apply font size to document
-      document.documentElement.style.setProperty(
-        '--chat-font-size',
-        `${settings.appearance.chatFontSize}px`
-      )
-
       applyFontVars(document.documentElement, settings.appearance)
 
       setDirty(false)

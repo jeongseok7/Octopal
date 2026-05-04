@@ -2855,7 +2855,7 @@ button {
 }
 
 .bubble-text {
-  font-size: var(--font-base);
+  font-size: var(--chat-font-size, var(--font-base));
   line-height: 1.5;
   word-wrap: break-word;
   white-space: pre-wrap;
