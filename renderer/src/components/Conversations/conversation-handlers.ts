@@ -82,3 +82,20 @@ export function applyDeleteConversation(
     conversations: { ...state.conversations, [folderPath]: nextConvs },
   }
 }
+
+// Must stay in sync with the Rust constants at
+// `src-tauri/src/commands/folder.rs` (`create_conversation` line ~974/977
+// and `delete_conversation` line ~1056). Changing one requires changing both.
+export const DEFAULT_CONVERSATION_TITLE = 'New conversation'
+
+export function shouldAutoRename(
+  state: ConversationState,
+  folderPath: string,
+  conversationId: string,
+): boolean {
+  const conv = (state.conversations[folderPath] || []).find((c) => c.id === conversationId)
+  if (!conv) return false
+  if (conv.title !== DEFAULT_CONVERSATION_TITLE) return false
+  const key = convKey(folderPath, conversationId)
+  return (state.messages[key] || []).length === 0
+}

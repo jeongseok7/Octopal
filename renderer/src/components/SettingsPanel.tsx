@@ -642,6 +642,20 @@ export function SettingsPanel({ onSettingsSaved, activeFolder }: SettingsPanelPr
           <div className="settings-section">
             <h3 className="settings-section-title">{t('settings.advanced.title')}</h3>
 
+            {/* Auto-rename runs on first user message in a default-titled conversation. */}
+            <label className="settings-toggle">
+              <span className="settings-toggle-info">
+                <span className="settings-label">{t('settings.advanced.autoRenameConversation')}</span>
+                <span className="settings-desc">{t('settings.advanced.autoRenameConversationDesc')}</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={settings.advanced?.autoRenameConversation !== false}
+                onChange={(e) => update('advanced', { autoRenameConversation: e.target.checked })}
+              />
+              <span className="toggle-slider" />
+            </label>
+
             {/* Backup Retention */}
             <h3 className="settings-section-title">
               <RotateCw size={16} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />

@@ -1028,6 +1028,149 @@ pub fn rename_conversation(
     Ok(meta)
 }
 
+/// Smallest model used for title generation. Hard-coded to Haiku 4.5 — the
+/// cheapest model the Claude CLI accepts as of v0.1.43.
+const TITLE_MODEL: &str = "claude-haiku-4-5-20251001";
+
+fn build_title_prompt(user_message: &str) -> String {
+    format!(
+        "Summarize the following user message into a short conversation title \
+         (max 40 characters, no quotes, no trailing punctuation, same language \
+         as the message). Reply with the title only.\n\n---\n{}\n---",
+        user_message
+    )
+}
+
+/// Squeeze whitespace, drop surrounding quotes/period, cap at 40 chars.
+fn clean_title(raw: &str) -> String {
+    let first_line: String = raw
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    let mut s = first_line.trim().to_string();
+    // Strip a single layer of surrounding quotes if present.
+    let char_count = s.chars().count();
+    if char_count >= 2 {
+        let first = s.chars().next().unwrap();
+        let last = s.chars().last().unwrap();
+        let matching = (first == '"' && last == '"')
+            || (first == '\'' && last == '\'')
+            || (first == '「' && last == '」')
+            || (first == '“' && last == '”');
+        if matching {
+            s = s.chars().skip(1).take(char_count - 2).collect();
+        }
+    }
+    s = s
+        .trim_end_matches(['.', '。', '!', '?'])
+        .to_string();
+    let collapsed: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() > 40 {
+        collapsed.chars().take(40).collect()
+    } else {
+        collapsed
+    }
+}
+
+/// Synchronous Claude CLI call. Returns the cleaned title string.
+fn generate_title_blocking(user_message: &str) -> Result<String, String> {
+    use crate::commands::claude_cli::claude_command;
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut cmd = claude_command();
+    cmd.args(["--print", "--model", TITLE_MODEL, "--no-session-persistence"]);
+    cmd.stdin(Stdio::piped());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {e}"))?;
+    let prompt = build_title_prompt(user_message);
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(prompt.as_bytes())
+            .map_err(|e| format!("stdin write failed: {e}"))?;
+    }
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    return Err("title generation timed out".to_string());
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => return Err(format!("wait failed: {e}")),
+        }
+    }
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("output capture failed: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("claude CLI failed: {}", stderr.trim()));
+    }
+    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+    let cleaned = clean_title(&raw);
+    if cleaned.is_empty() {
+        return Err("claude CLI returned empty title".to_string());
+    }
+    Ok(cleaned)
+}
+
+/// Persist the generated title via the existing rename path. Reuses the same
+/// sanitize + 200-char cap + write_conversations_index contract as
+/// `rename_conversation`. Default title constant must stay in sync with
+/// `create_conversation` above and `DEFAULT_CONVERSATION_TITLE` in
+/// `renderer/src/components/Conversations/conversation-handlers.ts`.
+fn apply_title_to_index(
+    folder_path: &str,
+    conversation_id: &str,
+    title: &str,
+) -> Result<ConversationMeta, String> {
+    let folder = Path::new(folder_path);
+    let mut list = read_conversations_index(folder);
+    let mut clean = sanitize_prompt_field(title);
+    if clean.is_empty() {
+        return Err("Generated title was empty after sanitization".to_string());
+    }
+    if clean.chars().count() > 200 {
+        clean = clean.chars().take(200).collect();
+    }
+    let mut updated: Option<ConversationMeta> = None;
+    for meta in list.iter_mut() {
+        if meta.id == conversation_id {
+            meta.title = clean.clone();
+            meta.updated_at = now_ms();
+            updated = Some(meta.clone());
+            break;
+        }
+    }
+    let meta =
+        updated.ok_or_else(|| format!("Conversation {} not found", conversation_id))?;
+    write_conversations_index(folder, &list)?;
+    Ok(meta)
+}
+
+#[tauri::command]
+pub async fn generate_conversation_title(
+    folder_path: String,
+    conversation_id: String,
+    prompt: String,
+) -> Result<ConversationMeta, String> {
+    let title = tokio::task::spawn_blocking(move || generate_title_blocking(&prompt))
+        .await
+        .map_err(|e| format!("join failed: {e}"))??;
+    apply_title_to_index(&folder_path, &conversation_id, &title)
+}
+
 #[tauri::command]
 pub fn delete_conversation(
     folder_path: String,
@@ -1164,6 +1307,41 @@ mod tests {
         let index = read_conversations_index(dir.path());
         let entry = index.iter().find(|c| c.id == conv.id).unwrap();
         assert_eq!(entry.title, "Renamed");
+    }
+
+    #[test]
+    fn clean_title_strips_quotes_and_caps_to_40() {
+        assert_eq!(clean_title("\"hello world\""), "hello world");
+        assert_eq!(clean_title("'hi'"), "hi");
+        assert_eq!(clean_title("「제목」"), "제목");
+        assert_eq!(clean_title("Title.\n"), "Title");
+        assert_eq!(clean_title("\n\na\n\n\nb"), "a");
+        let long = "x".repeat(60);
+        assert_eq!(clean_title(&long).chars().count(), 40);
+    }
+
+    #[test]
+    fn apply_title_to_index_updates_existing_conversation() {
+        let dir = tempdir().unwrap();
+        let fp = folder_path(&dir);
+        let conv = create_conversation(fp.clone(), Some("New conversation".into())).unwrap();
+        let updated = apply_title_to_index(&fp, &conv.id, "점심 메뉴 추천").unwrap();
+        assert_eq!(updated.title, "점심 메뉴 추천");
+        assert!(updated.updated_at >= conv.updated_at);
+        let reloaded = read_conversations_index(dir.path());
+        assert_eq!(
+            reloaded.iter().find(|m| m.id == conv.id).unwrap().title,
+            "점심 메뉴 추천"
+        );
+    }
+
+    #[test]
+    fn apply_title_to_index_rejects_unknown_id() {
+        let dir = tempdir().unwrap();
+        let fp = folder_path(&dir);
+        list_conversations(fp.clone()).unwrap();
+        let res = apply_title_to_index(&fp, "no-such-id", "title");
+        assert!(res.is_err());
     }
 
     #[test]
