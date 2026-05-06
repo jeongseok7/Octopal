@@ -21,6 +21,7 @@ import { TaskBoard } from './components/TaskBoard'
 import { ToastContainer, showToast } from './components/Toast'
 import { expandShortcut } from './shortcut-expander'
 import { convKey, sortConversations } from './components/Conversations/conversation-helpers'
+import { shouldAutoRename } from './components/Conversations/conversation-handlers'
 import { applyFontVars } from './components/settings/AppearanceFontSelector'
 
 /** Race a promise against a timeout. Rejects with a descriptive error if ms elapses. */
@@ -185,6 +186,7 @@ export function App() {
           i18n.changeLanguage(settings.general.language)
         }
         shortcutsRef.current = settings.shortcuts?.textExpansions || []
+        autoRenameOnRef.current = settings.advanced?.autoRenameConversation !== false
         const saved = settings.appearance?.theme
         if (saved === 'dark' || saved === 'light' || saved === 'system') {
           setTheme(saved)
@@ -310,6 +312,12 @@ export function App() {
   // Track folders that have already bootstrapped their default agent so we
   // don't re-trigger during the same session (e.g. when re-selecting a folder).
   const bootstrappedFoldersRef = useRef<Set<string>>(new Set())
+
+  // Auto-rename: per-`messagesKey` in-flight guard so a rapid double-send
+  // doesn't fire two title-generation calls. Default ON matches the Rust
+  // default; the toggle below flips it on settings load and on save.
+  const autoRenameOnRef = useRef<boolean>(true)
+  const autoRenameInFlightRef = useRef<Set<string>>(new Set())
 
   // Load octos + history when folder changes (paged — last PAGE_SIZE messages)
   useEffect(() => {
@@ -982,6 +990,41 @@ export function App() {
 
     setInput('')
     setMentionOpen(false)
+
+    // Auto-rename: fire-and-forget on the first user message of a still-default
+    // -titled conversation. MUST run before `setMessages` appends the new
+    // message — `shouldAutoRename` reads `messages[messagesKey].length === 0`
+    // to detect "first message," and that snapshot is only valid pre-append.
+    if (
+      autoRenameOnRef.current
+      && hasText
+      && shouldAutoRename(
+        { conversations, activeConversationId, messages, hasMoreMessages },
+        activeFolder,
+        conversationId,
+      )
+      && !autoRenameInFlightRef.current.has(messagesKey)
+    ) {
+      autoRenameInFlightRef.current.add(messagesKey)
+      const folder = activeFolder
+      const cid = conversationId
+      const key = messagesKey
+      window.api.generateConversationTitle({
+        folderPath: folder,
+        conversationId: cid,
+        prompt: text,
+      })
+        .then((updated) => {
+          setConversations((prev) => ({
+            ...prev,
+            [folder]: sortConversations(
+              (prev[folder] || []).map((c) => (c.id === updated.id ? updated : c)),
+            ),
+          }))
+        })
+        .catch((err) => console.error('[AutoRename] failed', err))
+        .finally(() => autoRenameInFlightRef.current.delete(key))
+    }
 
     const ts = Date.now()
     const userMessage: Message = {
@@ -2056,6 +2099,7 @@ export function App() {
             activeFolder={activeFolder}
             onSettingsSaved={(s) => {
               shortcutsRef.current = s.shortcuts?.textExpansions || []
+              autoRenameOnRef.current = s.advanced?.autoRenameConversation !== false
               const saved = s.appearance?.theme
               if (saved === 'dark' || saved === 'light' || saved === 'system') {
                 setTheme(saved)

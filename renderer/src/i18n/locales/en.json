@@ -126,6 +126,8 @@
       "title": "Advanced",
       "autoModelSelection": "Adaptive Model Selection",
       "autoModelSelectionDesc": "Automatically choose the optimal AI model based on task complexity. When off, all agents use the default model.",
+      "autoRenameConversation": "Auto-rename new conversations",
+      "autoRenameConversationDesc": "When you send your first message in a default-titled conversation, Octopal asks the smallest Claude model to summarize it into a short title. Off keeps the title as 'New conversation' so you can rename it manually.",
       "defaultAgentModel": "Default Agent Model",
       "defaultAgentModelDesc": "Fixed model for all agent responses when adaptive selection is disabled.",
       "modelHaiku": "Haiku (fast & cheap)",

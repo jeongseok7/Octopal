@@ -142,6 +142,7 @@ interface AppSettings {
   advanced: {
     defaultAgentModel: 'sonnet' | 'opus' | 'haiku'
     autoModelSelection: boolean
+    autoRenameConversation?: boolean
   }
   backup?: {
     maxBackupsPerWorkspace: number
@@ -233,6 +234,11 @@ interface Window {
       folderPath: string
       conversationId: string
       title: string
+    }) => Promise<import('./types').Conversation>
+    generateConversationTitle: (params: {
+      folderPath: string
+      conversationId: string
+      prompt: string
     }) => Promise<import('./types').Conversation>
     deleteConversation: (params: { folderPath: string; conversationId: string }) =>
       Promise<void>

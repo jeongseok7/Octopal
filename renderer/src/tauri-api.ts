@@ -96,6 +96,16 @@ export function createTauriApi(): typeof window.api {
         conversationId: params.conversationId,
         title: params.title,
       }),
+    generateConversationTitle: (params: {
+      folderPath: string
+      conversationId: string
+      prompt: string
+    }) =>
+      invoke('generate_conversation_title', {
+        folderPath: params.folderPath,
+        conversationId: params.conversationId,
+        prompt: params.prompt,
+      }),
     deleteConversation: (params: { folderPath: string; conversationId: string }) =>
       invoke('delete_conversation', {
         folderPath: params.folderPath,

@@ -5,6 +5,8 @@ import {
   applySwitchConversationLoaded,
   applyRenameConversation,
   applyDeleteConversation,
+  shouldAutoRename,
+  DEFAULT_CONVERSATION_TITLE,
   type ConversationState,
 } from './conversation-handlers'
 
@@ -117,5 +119,36 @@ describe('applyDeleteConversation', () => {
     expect(next.messages['/p::shared']).toBeUndefined()
     expect(next.messages['/q::shared']).toEqual([{ id: 'q-msg' }])
     expect(next.conversations['/q'].map((c) => c.id)).toEqual(['shared'])
+  })
+})
+
+describe('shouldAutoRename', () => {
+  const base = (): ConversationState => ({
+    conversations: { '/p': [conv('a', 1, DEFAULT_CONVERSATION_TITLE)] },
+    activeConversationId: { '/p': 'a' },
+    messages: { '/p::a': [] },
+    hasMoreMessages: { '/p::a': false },
+  })
+
+  it('returns true when title is default and no messages yet', () => {
+    expect(shouldAutoRename(base(), '/p', 'a')).toBe(true)
+  })
+
+  it('returns false when title was manually changed', () => {
+    const s = base()
+    s.conversations['/p'] = [conv('a', 1, 'My custom title')]
+    expect(shouldAutoRename(s, '/p', 'a')).toBe(false)
+  })
+
+  it('returns false when at least one message already exists', () => {
+    const s = base()
+    s.messages['/p::a'] = [
+      { id: 'u-1', agentName: 'user', text: 'hi', ts: 1 } as Message,
+    ]
+    expect(shouldAutoRename(s, '/p', 'a')).toBe(false)
+  })
+
+  it('returns false when conversation does not exist for the folder', () => {
+    expect(shouldAutoRename(base(), '/p', 'missing')).toBe(false)
   })
 })

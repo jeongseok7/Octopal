@@ -202,6 +202,12 @@ pub struct AdvancedSettings {
     pub default_agent_model: String,
     #[serde(rename = "autoModelSelection")]
     pub auto_model_selection: bool,
+    #[serde(rename = "autoRenameConversation", default = "default_true")]
+    pub auto_rename_conversation: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -338,6 +344,7 @@ impl Default for AppSettings {
             advanced: AdvancedSettings {
                 default_agent_model: "opus".to_string(),
                 auto_model_selection: false,
+                auto_rename_conversation: true,
             },
             version_control: VersionControlSettings { auto_commit: true },
             backup: BackupSettings::default(),
@@ -574,6 +581,8 @@ mod migration_tests {
         assert_eq!(s.appearance.ui_font, "system");
         assert_eq!(s.appearance.chat_font, "system");
         assert_eq!(s.appearance.code_font, "system");
+        // New autoRenameConversation field defaults to true on legacy upgrade.
+        assert_eq!(s.advanced.auto_rename_conversation, true);
     }
 
     #[test]

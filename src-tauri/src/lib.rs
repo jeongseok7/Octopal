@@ -210,6 +210,7 @@ pub fn run() {
             commands::folder::list_conversations,
             commands::folder::create_conversation,
             commands::folder::rename_conversation,
+            commands::folder::generate_conversation_title,
             commands::folder::delete_conversation,
             // Octo (Agent CRUD)
             commands::octo::create_octo,
